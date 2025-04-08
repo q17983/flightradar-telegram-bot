@@ -1,0 +1,36 @@
+// .vscode/settings.json
+{
+  // Enable Deno for the workspace, but restrict its active features (like linting/formatting)
+  // primarily to the specified paths for better performance and isolation.
+  "deno.enable": true,
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+
+  // Enable Deno's built-in linter for files within the enablePaths.
+  "deno.lint": true,
+
+  // Enable specific unstable Deno APIs. Must be an array.
+  // This list includes common ones, potentially needed by Supabase or other Deno features.
+  "deno.unstable": [
+    "bare-node-builtins",
+    "broadcast-channel",
+    "byonm",
+    "cron",
+    "ffi",
+    "fs",
+    "http",
+    "kv",
+    "net",
+    "sloppy-imports",
+    "unsafe-proto",
+    "webgpu",
+    "worker-options"
+  ],
+
+  // Specific settings for TypeScript files
+  "[typescript]": {
+    // Set the Deno extension as the default formatter for TypeScript files.
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  }
+}

@@ -1,0 +1,15 @@
+# Flightradar crawling/.gitignore
+
+# Ignore Python virtual environment (located at the root)
+venv/
+
+# Ignore environment variables files (located at the root and in supabase)
+.env
+supabase/.env.local
+
+# Ignore macOS system file
+.DS_Store
+
+# Ignore Python cache files (can appear anywhere)
+__pycache__/
+*.pyc
