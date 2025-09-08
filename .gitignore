@@ -1,15 +1,42 @@
-# Flightradar crawling/.gitignore
-
-# Ignore Python virtual environment (located at the root)
-venv/
-
-# Ignore environment variables files (located at the root and in supabase)
+# Environment variables
 .env
-supabase/.env.local
+.env.local
 
-# Ignore macOS system file
-.DS_Store
-
-# Ignore Python cache files (can appear anywhere)
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+*.bak
