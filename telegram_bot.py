@@ -27,8 +27,12 @@ logger = logging.getLogger(__name__)
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = "https://prcnxrkyjnpljoqiazkp.supabase.co"
+SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://prcnxrkyjnpljoqiazkp.supabase.co"
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+# Clean up the ANON key (remove quotes if present)
+if SUPABASE_ANON_KEY and SUPABASE_ANON_KEY.startswith('"') and SUPABASE_ANON_KEY.endswith('"'):
+    SUPABASE_ANON_KEY = SUPABASE_ANON_KEY[1:-1]
 
 # Check required environment variables
 if not TELEGRAM_BOT_TOKEN:
@@ -145,6 +149,10 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     # FORCE the correct date range regardless of what Gemini suggests
     parameters["start_time"] = "2024-04-01"
     parameters["end_time"] = "2025-05-31"
+    
+    # Debug: Log the credentials being used
+    logger.info(f"Using SUPABASE_URL: {SUPABASE_URL}")
+    logger.info(f"Using ANON_KEY (first 20 chars): {SUPABASE_ANON_KEY[:20] if SUPABASE_ANON_KEY else 'None'}...")
     
     url = FUNCTION_MAP[function_name]["url"]
     headers = {
