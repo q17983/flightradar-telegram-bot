@@ -171,11 +171,56 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     except Exception as e:
         return {"error": f"Request failed: {str(e)}"}
 
+def format_enhanced_destination_results(results: dict) -> str:
+    """Format enhanced Function 1 results with freighter/passenger breakdown."""
+    dest = results.get("destination_code", "Unknown")
+    summary = results.get("summary", {})
+    
+    message = f"🛬 **OPERATORS TO {dest}**\n"
+    message += f"📅 *Period: {results.get('period_start')} to {results.get('period_end')}*\n"
+    message += f"📊 *Total: {summary.get('total_flights', 0):,} flights ({summary.get('freighter_percentage', 0)}% freight, {summary.get('passenger_percentage', 0)}% passenger)*\n\n"
+    
+    # Freighter operators - Show ALL
+    freighter_ops = results.get("freighter_operators", [])
+    if freighter_ops:
+        message += f"🚛 **FREIGHTER ({len(freighter_ops)} operators)**:\n"
+        for i, op in enumerate(freighter_ops, 1):  # Show ALL freighter operators
+            iata = op.get('operator_iata_code') or 'N/A'
+            icao = op.get('operator_icao_code') or 'N/A'
+            message += f"{i}. **{op['operator']}** ({iata}/{icao}): {op['total_frequency']:,} flights\n"
+            # Show top aircraft types for this operator
+            for aircraft in op['aircraft_types'][:2]:  # Show top 2 aircraft types
+                message += f"   • {aircraft['aircraft_type']}: {aircraft['frequency']:,} flights\n"
+        message += "\n"
+    
+    # Passenger operators - Show at least 25
+    passenger_ops = results.get("passenger_operators", [])
+    if passenger_ops:
+        passenger_limit = max(25, len(passenger_ops))  # At least 25, or all if fewer
+        message += f"✈️ **PASSENGER ({len(passenger_ops)} operators)**:\n"
+        for i, op in enumerate(passenger_ops[:passenger_limit], 1):  # Show at least 25
+            iata = op.get('operator_iata_code') or 'N/A'
+            icao = op.get('operator_icao_code') or 'N/A'
+            message += f"{i}. **{op['operator']}** ({iata}/{icao}): {op['total_frequency']:,} flights\n"
+            # Show top aircraft types for this operator
+            for aircraft in op['aircraft_types'][:2]:  # Show top 2 aircraft types
+                message += f"   • {aircraft['aircraft_type']}: {aircraft['frequency']:,} flights\n"
+        message += "\n"
+        
+        if len(passenger_ops) > passenger_limit:
+            message += f"💡 *Note: Showing top {passenger_limit} passenger operators (out of {len(passenger_ops)} total)*\n"
+    
+    return message
+
 def format_results_for_telegram(results: dict, function_name: str) -> str:
     """Format results for Telegram message."""
     
     if "error" in results:
         return f"❌ Error: {results['error']}"
+    
+    # Handle enhanced Function 1 format (with freighter/passenger breakdown)
+    if function_name == "get_operators_by_destination" and "freighter_operators" in results:
+        return format_enhanced_destination_results(results)
     
     if "results" not in results or not results["results"]:
         return "📭 No results found for your query."
