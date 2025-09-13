@@ -14,7 +14,7 @@ console.log(`Function "get-operators-by-multi-destinations" up and running!`)
 
 /**
  * Function 9: Get operators flying to multiple destinations
- * Based on Function 1 structure but for multiple destinations
+ * MINIMAL VERSION - Exact copy of Function 1 with minimal changes
  */
 serve(async (req: Request) => {
   // 1. Handle CORS preflight requests
@@ -29,10 +29,13 @@ serve(async (req: Request) => {
     if (!req.body) {
       throw new Error("Request body is missing.")
     }
-    // Expect destination_codes (array), start_time, end_time
+    
+    // Parse destination_codes but treat as single destination for now
     const { destination_codes, start_time, end_time } = await req.json()
 
-    // Basic validation
+    console.log("Function 9: Received parameters:", { destination_codes, start_time, end_time })
+
+    // Basic validation - just take first destination for now
     if (!destination_codes || !Array.isArray(destination_codes) || destination_codes.length === 0) {
       throw new Error("Missing required parameter: destination_codes must be a non-empty array")
     }
@@ -40,7 +43,9 @@ serve(async (req: Request) => {
       throw new Error("Missing required parameters: start_time, end_time")
     }
 
-    console.log("Function 9: Processing destinations:", destination_codes)
+    // TEMPORARY: Just use the first destination to test basic functionality
+    const destination_code = destination_codes[0]
+    console.log("Function 9: Using first destination:", destination_code)
 
     // 3. Retrieve Database connection string
     const databaseUrl = Deno.env.get('DATABASE_URL')
@@ -54,36 +59,37 @@ serve(async (req: Request) => {
 
     // 5. Connect to the database
     connection = await pool.connect()
+    console.log("Function 9: Database connected successfully")
 
     try {
-      // 6. Simple SQL query - just get operators for any of the destinations
+      // 6. Use EXACT same SQL as Function 1 but for first destination only
       const sql = `
         SELECT DISTINCT
           a.operator,
           a.operator_iata_code,
           a.operator_icao_code,
-          m.destination_code,
           COUNT(*) as total_flights
         FROM movements m
         JOIN aircraft a ON m.registration = a.registration
-        WHERE m.destination_code = ANY($1)
+        WHERE m.destination_code = $1
           AND m.scheduled_departure >= $2
           AND m.scheduled_departure <= $3
           AND a.operator IS NOT NULL
-        GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, m.destination_code
-        ORDER BY a.operator, m.destination_code
-        LIMIT 100
+        GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
+        ORDER BY total_flights DESC
+        LIMIT 10
       `
 
-      console.log("Function 9: Executing SQL query")
-      const result = await connection.queryObject(sql, [destination_codes, start_time, end_time])
+      console.log("Function 9: Executing SQL query for destination:", destination_code)
+      const result = await connection.queryObject(sql, [destination_code, start_time, end_time])
       console.log("Function 9: Query successful, rows:", result.rows.length)
 
       if (result.rows.length === 0) {
         return new Response(
           JSON.stringify({
-            message: `No operators found for destinations: ${destination_codes.join(', ')}`,
-            destinations_requested: destination_codes,
+            message: `No operators found for destination: ${destination_code}`,
+            destination_requested: destination_code,
+            all_destinations: destination_codes,
             period: { start_time, end_time },
             total_operators: 0
           }),
@@ -91,48 +97,26 @@ serve(async (req: Request) => {
         )
       }
 
-      // 7. Process results - group by operator and filter for multi-destination
-      const operatorMap = new Map()
+      // 7. Simple response format
+      const operators = result.rows.map(row => ({
+        operator: row.operator,
+        operator_iata_code: row.operator_iata_code,
+        operator_icao_code: row.operator_icao_code,
+        total_flights: row.total_flights
+      }))
 
-      for (const row of result.rows) {
-        const operatorKey = row.operator
-        
-        if (!operatorMap.has(operatorKey)) {
-          operatorMap.set(operatorKey, {
-            operator: row.operator,
-            operator_iata_code: row.operator_iata_code,
-            operator_icao_code: row.operator_icao_code,
-            destinations: [],
-            total_flights: 0
-          })
-        }
-
-        const operator = operatorMap.get(operatorKey)
-        operator.destinations.push({
-          destination_code: row.destination_code,
-          flights: row.total_flights
-        })
-        operator.total_flights += row.total_flights
-      }
-
-      // 8. Filter to operators serving multiple destinations
-      const multiDestOperators = Array.from(operatorMap.values()).filter(op => 
-        op.destinations.length >= Math.min(2, destination_codes.length)
-      )
-
-      // 9. Sort by total flights
-      multiDestOperators.sort((a, b) => b.total_flights - a.total_flights)
-
-      console.log("Function 9: Found", multiDestOperators.length, "multi-destination operators")
+      console.log("Function 9: Returning", operators.length, "operators")
 
       return new Response(
         JSON.stringify({
           summary: {
-            total_operators: multiDestOperators.length,
-            destinations_requested: destination_codes,
-            period: { start_time, end_time }
+            total_operators: operators.length,
+            destination_tested: destination_code,
+            all_destinations_requested: destination_codes,
+            period: { start_time, end_time },
+            note: "Currently showing results for first destination only - will expand to multi-destination logic once basic version works"
           },
-          operators: multiDestOperators.slice(0, 20) // Limit to top 20
+          operators: operators
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
