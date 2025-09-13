@@ -7,7 +7,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { Pool } from 'https://deno.land/x/postgres@v0.17.0/mod.ts'
-import { corsHeaders } from '../_shared/cors.ts' // Use shared CORS
+// CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 const DATABASE_POOL_SIZE = 3
 console.log(`Function "get-operator-details" up and running!`)
@@ -29,12 +33,12 @@ serve(async (req: Request) => {
     if (!req.body) {
       throw new Error("Request body is missing.")
     }
-    
+    // Expect search_query, operator_selection, start_time, end_time
     const { 
       search_query, 
       operator_selection, 
-      start_time = "2024-01-01", 
-      end_time = "2024-12-31" 
+      start_time = "2024-04-01", 
+      end_time = "2025-05-31" 
     } = await req.json()
 
     // Basic validation
