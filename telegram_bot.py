@@ -528,6 +528,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     logger.info(f"Query from {user_name}: {user_query}")
     
+    # TEMPORARY: Direct test of Function 9
+    if user_query.lower() == "test function 9":
+        logger.info("🧪 DIRECT FUNCTION 9 TEST ACTIVATED")
+        await update.message.reply_text("🧪 Testing Function 9 directly...")
+        
+        try:
+            # Call Function 9 directly with test mode
+            result = await call_supabase_function("get_operators_by_multi_destinations", {
+                "test_mode": True,
+                "destination_codes": ["HKG", "JFK"],
+                "start_time": "2024-04-01",
+                "end_time": "2025-05-31"
+            })
+            
+            await update.message.reply_text(f"🔬 Function 9 Direct Test Result:\n{result}")
+            return
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Function 9 Direct Test Failed: {e}")
+            return
+    
     # Send "typing" indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
