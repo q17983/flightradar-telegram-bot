@@ -74,95 +74,56 @@ serve(async (req) => {
       connection = await pool.connect()
       console.log("Function 9: Database connection established")
 
-      // 6. Enhanced SQL query to find operators serving multiple destinations
+      // 6. Simplified SQL query to find operators serving multiple destinations
       const placeholders = destination_codes.map((_, index) => `$${index + 3}`).join(', ')
       
-      const enhancedSql = `
-        WITH operator_destinations AS (
-          SELECT 
-            a.operator,
-            a.operator_iata_code,
-            a.operator_icao_code,
-            m.destination_code,
-            a.type,
-            a.aircraft_details,
-            CASE 
-              WHEN UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-                OR UPPER(a.aircraft_details) LIKE '%-F%'
-                OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-                OR UPPER(a.aircraft_details) LIKE '%BCF%'
-                OR UPPER(a.aircraft_details) LIKE '%SF%'
-              THEN 'Freighter'
-              ELSE 'Passenger'
-            END as aircraft_category,
-            COUNT(*) as flights_count
-          FROM movements m
-          JOIN aircraft a ON m.registration = a.registration
-          WHERE m.destination_code IN (${placeholders})
-            AND m.scheduled_departure >= $1
-            AND m.scheduled_departure <= $2
-            AND a.operator IS NOT NULL
-          GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, 
-                   m.destination_code, a.type, a.aircraft_details, aircraft_category
-        ),
-        operator_destination_counts AS (
-          SELECT 
-            operator,
-            operator_iata_code,
-            operator_icao_code,
-            COUNT(DISTINCT destination_code) as destinations_served,
-            ARRAY_AGG(DISTINCT destination_code ORDER BY destination_code) as destinations_list
-          FROM operator_destinations
-          GROUP BY operator, operator_iata_code, operator_icao_code
-          HAVING COUNT(DISTINCT destination_code) >= $${destination_codes.length + 3}
-        ),
-        enhanced_results AS (
-          SELECT 
-            odc.operator,
-            odc.operator_iata_code,
-            odc.operator_icao_code,
-            odc.destinations_served,
-            odc.destinations_list,
-            od.destination_code,
-            od.aircraft_category,
-            od.type,
-            od.aircraft_details,
-            SUM(od.flights_count) as total_flights,
-            COUNT(DISTINCT od.type) as aircraft_types_count
-          FROM operator_destination_counts odc
-          JOIN operator_destinations od ON odc.operator = od.operator 
-            AND odc.operator_iata_code = od.operator_iata_code 
-            AND odc.operator_icao_code = od.operator_icao_code
-          GROUP BY odc.operator, odc.operator_iata_code, odc.operator_icao_code,
-                   odc.destinations_served, odc.destinations_list,
-                   od.destination_code, od.aircraft_category, od.type, od.aircraft_details
+      const simplifiedSql = `
+        SELECT DISTINCT
+          a.operator,
+          a.operator_iata_code,
+          a.operator_icao_code,
+          m.destination_code,
+          COUNT(*) as flights_to_destination,
+          COUNT(CASE WHEN 
+            UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+            OR UPPER(a.aircraft_details) LIKE '%-F%'
+            OR UPPER(a.aircraft_details) LIKE '%CARGO%'
+            OR UPPER(a.aircraft_details) LIKE '%BCF%'
+            OR UPPER(a.aircraft_details) LIKE '%SF%'
+          THEN 1 END) as freighter_flights,
+          COUNT(CASE WHEN NOT (
+            UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+            OR UPPER(a.aircraft_details) LIKE '%-F%'
+            OR UPPER(a.aircraft_details) LIKE '%CARGO%'
+            OR UPPER(a.aircraft_details) LIKE '%BCF%'
+            OR UPPER(a.aircraft_details) LIKE '%SF%'
+          ) THEN 1 END) as passenger_flights
+        FROM movements m
+        JOIN aircraft a ON m.registration = a.registration
+        WHERE m.destination_code IN (${placeholders})
+          AND m.scheduled_departure >= $1
+          AND m.scheduled_departure <= $2
+          AND a.operator IS NOT NULL
+        GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, m.destination_code
+        HAVING a.operator IN (
+          SELECT a2.operator
+          FROM movements m2
+          JOIN aircraft a2 ON m2.registration = a2.registration
+          WHERE m2.destination_code IN (${placeholders})
+            AND m2.scheduled_departure >= $1
+            AND m2.scheduled_departure <= $2
+            AND a2.operator IS NOT NULL
+          GROUP BY a2.operator
+          HAVING COUNT(DISTINCT m2.destination_code) >= $${destination_codes.length + 3}
         )
-        SELECT 
-          operator,
-          operator_iata_code,
-          operator_icao_code,
-          destinations_served,
-          destinations_list,
-          destination_code,
-          aircraft_category,
-          type,
-          aircraft_details,
-          total_flights,
-          aircraft_types_count,
-          -- Summary calculations
-          SUM(total_flights) OVER (PARTITION BY operator, operator_iata_code, operator_icao_code) as operator_total_flights,
-          SUM(CASE WHEN aircraft_category = 'Freighter' THEN total_flights ELSE 0 END) 
-            OVER (PARTITION BY operator, operator_iata_code, operator_icao_code) as operator_freighter_flights,
-          SUM(CASE WHEN aircraft_category = 'Passenger' THEN total_flights ELSE 0 END) 
-            OVER (PARTITION BY operator, operator_iata_code, operator_icao_code) as operator_passenger_flights
-        FROM enhanced_results
-        ORDER BY operator_total_flights DESC, operator, destination_code, aircraft_category DESC, total_flights DESC
+        ORDER BY a.operator, m.destination_code
+        LIMIT 200
       `
 
       console.log("Function 9: Executing enhanced SQL query")
       console.log("SQL parameters:", [start_time, end_time, ...destination_codes, min_dest])
 
-      const result = await connection.queryObject(enhancedSql, [start_time, end_time, ...destination_codes, min_dest])
+      const result = await connection.queryObject(simplifiedSql, [start_time, end_time, ...destination_codes, min_dest])
       
       console.log("Function 9: Query executed successfully, rows returned:", result.rows.length)
 
@@ -179,7 +140,7 @@ serve(async (req) => {
         )
       }
 
-      // 7. Process and structure the results
+      // 7. Process and structure the simplified results
       const operatorMap = new Map()
 
       for (const row of result.rows) {
@@ -190,53 +151,42 @@ serve(async (req) => {
             operator: row.operator,
             operator_iata_code: row.operator_iata_code,
             operator_icao_code: row.operator_icao_code,
-            destinations_served: row.destinations_served,
-            destinations_list: row.destinations_list,
-            total_flights: row.operator_total_flights,
-            freighter_flights: row.operator_freighter_flights,
-            passenger_flights: row.operator_passenger_flights,
-            freighter_percentage: Math.round((row.operator_freighter_flights / row.operator_total_flights) * 100),
-            destinations: new Map()
+            destinations: new Map(),
+            total_flights: 0,
+            total_freighter_flights: 0,
+            total_passenger_flights: 0
           })
         }
 
         const operator = operatorMap.get(operatorKey)
-        const dest = row.destination_code
-
-        if (!operator.destinations.has(dest)) {
-          operator.destinations.set(dest, {
-            destination_code: dest,
-            total_flights: 0,
-            freighter_flights: 0,
-            passenger_flights: 0,
-            aircraft_details: []
-          })
-        }
-
-        const destData = operator.destinations.get(dest)
-        destData.total_flights += row.total_flights
         
-        if (row.aircraft_category === 'Freighter') {
-          destData.freighter_flights += row.total_flights
-        } else {
-          destData.passenger_flights += row.total_flights
-        }
-
-        destData.aircraft_details.push({
-          type: row.type,
-          aircraft_details: row.aircraft_details,
-          category: row.aircraft_category,
-          flights: row.total_flights
+        operator.destinations.set(row.destination_code, {
+          destination_code: row.destination_code,
+          total_flights: row.flights_to_destination,
+          freighter_flights: row.freighter_flights,
+          passenger_flights: row.passenger_flights,
+          freighter_percentage: row.flights_to_destination > 0 ? 
+            Math.round((row.freighter_flights / row.flights_to_destination) * 100) : 0
         })
+        
+        operator.total_flights += row.flights_to_destination
+        operator.total_freighter_flights += row.freighter_flights
+        operator.total_passenger_flights += row.passenger_flights
       }
 
       // 8. Convert to final response format
       const operators = Array.from(operatorMap.values()).map(op => ({
-        ...op,
-        destinations: Array.from(op.destinations.values()).map(dest => ({
-          ...dest,
-          freighter_percentage: dest.total_flights > 0 ? Math.round((dest.freighter_flights / dest.total_flights) * 100) : 0
-        }))
+        operator: op.operator,
+        operator_iata_code: op.operator_iata_code,
+        operator_icao_code: op.operator_icao_code,
+        destinations_served: op.destinations.size,
+        destinations_list: Array.from(op.destinations.keys()).sort(),
+        total_flights: op.total_flights,
+        freighter_flights: op.total_freighter_flights,
+        passenger_flights: op.total_passenger_flights,
+        freighter_percentage: op.total_flights > 0 ? 
+          Math.round((op.total_freighter_flights / op.total_flights) * 100) : 0,
+        destinations: Array.from(op.destinations.values())
       }))
 
       // 9. Calculate summary statistics
