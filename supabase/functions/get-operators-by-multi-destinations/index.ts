@@ -6,10 +6,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { corsHeaders } from '../_shared/cors.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Pool } from 'https://deno.land/x/postgres@v0.17.0/mod.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
+const DATABASE_POOL_SIZE = 3
 console.log(`Function "get-operators-by-multi-destinations" up and running!`)
 
 /**
@@ -21,6 +21,8 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+
+  let connection; // Define connection outside try block to access in finally
 
   try {
     console.log("=== Function 9: get-operators-by-multi-destinations ===")
@@ -61,16 +63,15 @@ serve(async (req: Request) => {
 
     console.log("✅ Valid parameters received:", { destination_codes, start_time, end_time })
 
-    // Initialize database connection like other working functions
+    // 4. Connect to the database
     const databaseUrl = Deno.env.get('DATABASE_URL')!
-    const pool = new Pool(databaseUrl, 3, true)
-    let connection: any = null
+    const pool = new Pool(databaseUrl, DATABASE_POOL_SIZE, true)
+    
+    // 5. Connect to the database
+    connection = await pool.connect()
 
     try {
-      // Connect to the database
-      connection = await pool.connect()
-
-      // Build SQL query to find operators serving multiple destinations
+      // 6. Build SQL query to find operators serving multiple destinations
       const destinationPlaceholders = destination_codes.map((_, i) => `$${i + 2}`).join(',')
       const sql = `
         SELECT
@@ -92,16 +93,16 @@ serve(async (req: Request) => {
         ORDER BY a.operator, frequency DESC;
       `
       
-      // Execute the query
-      const result = await connection.queryObject(sql, [
+      // 7. Execute the query
+      const queryResult = await connection.queryObject(sql, [
         start_time,       // $1
         ...destination_codes, // $2, $3, etc.
         end_time          // $last
       ])
 
-      console.log("📊 Raw query results:", result.rows?.length || 0, "records")
+      console.log("📊 Raw query results:", queryResult.rows?.length || 0, "records")
 
-      if (!result.rows || result.rows.length === 0) {
+      if (!queryResult.rows || queryResult.rows.length === 0) {
         console.log("❌ No data found")
         return new Response(
           JSON.stringify({ 
@@ -116,10 +117,10 @@ serve(async (req: Request) => {
         )
       }
 
-      // Group by operator and count unique destinations served
+      // 8. Group by operator and count unique destinations served
       const operatorDestinations = new Map()
       
-      result.rows.forEach(flight => {
+      queryResult.rows.forEach(flight => {
         const key = `${flight.operator_iata_code}|${flight.operator}`
         if (!operatorDestinations.has(key)) {
           operatorDestinations.set(key, {
@@ -137,7 +138,7 @@ serve(async (req: Request) => {
         operator.total_flights += flight.frequency
       })
 
-      // Filter operators that serve ALL specified destinations
+      // 9. Filter operators that serve ALL specified destinations
       const multiDestinationOperators = Array.from(operatorDestinations.values())
         .filter(operator => operator.destinations.size >= destination_codes.length)
         .map(operator => ({
@@ -173,15 +174,6 @@ serve(async (req: Request) => {
         }
       )
 
-    } catch (dbError) {
-      console.log("❌ Database error:", dbError)
-      return new Response(
-        JSON.stringify({ error: 'Database query failed', details: dbError.message }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
     } finally {
       if (connection) {
         connection.release()
