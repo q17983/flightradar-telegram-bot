@@ -7,6 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { Pool } from 'https://deno.land/x/postgres@v0.17.0/mod.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts' // Use shared CORS
 
 const DATABASE_POOL_SIZE = 3
@@ -43,9 +44,11 @@ serve(async (req: Request) => {
     }
 
     // 3. Retrieve Database connection string
-    const databaseUrl = Deno.env.get('DATABASE_URL')
+    const databaseUrl = Deno.env.get('DATABASE_URL') // Use DATABASE_URL from .env.local
+    console.log("Function 8: DATABASE_URL available:", !!databaseUrl)
     if (!databaseUrl) {
       console.error("Database connection string (DATABASE_URL) not found in environment variables.")
+      console.log("Available env vars:", Object.keys(Deno.env.toObject()))
       throw new Error("Internal server configuration error.")
     }
 
@@ -54,6 +57,11 @@ serve(async (req: Request) => {
 
     // 5. Connect to the database
     connection = await pool.connect()
+    console.log("Function 8: Database connection established successfully")
+
+    // Test basic database connectivity
+    const testResult = await connection.queryObject("SELECT 1 as test")
+    console.log("Function 8: Database test query successful:", testResult.rows)
 
     // 6. Handle two modes: search or get details
     if (operator_selection) {

@@ -755,7 +755,17 @@ def is_operator_search_query(query: str) -> bool:
     ]
     
     query_lower = query.lower()
-    return any(keyword in query_lower for keyword in operator_keywords)
+    
+    # Check for exact phrase matches
+    if any(keyword in query_lower for keyword in operator_keywords):
+        return True
+    
+    # Check for flexible patterns: "operator [code] details" or "[code] operator details"
+    words = query_lower.split()
+    has_operator = "operator" in words
+    has_details = any(word in words for word in ["details", "info", "profile", "breakdown"])
+    
+    return has_operator and has_details
 
 def extract_operator_from_query(query: str) -> str:
     """Extract operator search term from query."""
@@ -767,10 +777,18 @@ def extract_operator_from_query(query: str) -> str:
     ]
     
     query_clean = query.lower()
+    
+    # Try exact prefix removal first
     for prefix in prefixes_to_remove:
         if query_clean.startswith(prefix):
             query_clean = query_clean[len(prefix):].strip()
             break
+    else:
+        # Handle flexible patterns like "operator FX details" or "FX operator details"
+        words = query_clean.split()
+        # Remove operator-related and detail-related words
+        words_to_remove = ["operator", "details", "info", "profile", "breakdown", "show", "get", "for"]
+        query_clean = " ".join(word for word in words if word not in words_to_remove)
     
     return query_clean.strip()
 
