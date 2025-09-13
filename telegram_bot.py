@@ -236,11 +236,11 @@ def format_enhanced_destination_results(results: dict) -> str:
     
     return message
 
-def format_multi_destination_results(results: dict) -> str:
-    """Format Function 9 multi-destination operator results."""
+def format_multi_destination_results(results: dict) -> list:
+    """Format Function 9 multi-destination operator results. Returns list of messages for splitting."""
     
     if "error" in results:
-        return f"❌ Error: {results['error']}"
+        return [f"❌ Error: {results['error']}"]
     
     operators = results.get("operators", [])
     destination_codes = results.get("destination_codes", [])
@@ -248,32 +248,48 @@ def format_multi_destination_results(results: dict) -> str:
     
     if not operators:
         dest_str = " and ".join(destination_codes)
-        return f"📭 No operators found serving both {dest_str}."
+        return [f"📭 No operators found serving both {dest_str}."]
     
     dest_str = " and ".join(destination_codes)
-    message = f"🛬 **OPERATORS SERVING BOTH {dest_str}**\n"
-    message += f"📅 *Period: {results.get('time_range', {}).get('start_time')} to {results.get('time_range', {}).get('end_time')}*\n"
-    message += f"📊 *Found: {summary.get('total_operators', 0)} operators*\n\n"
     
-    # Show top operators (limit to 20 for readability)
-    display_limit = min(20, len(operators))
-    for i, op in enumerate(operators[:display_limit], 1):
+    # Create header message
+    header = f"🛬 **OPERATORS SERVING BOTH {dest_str}**\n"
+    header += f"📅 *Period: {results.get('time_range', {}).get('start_time')} to {results.get('time_range', {}).get('end_time')}*\n"
+    header += f"📊 *Found: {summary.get('total_operators', 0)} operators*\n\n"
+    
+    messages = []
+    current_message = header
+    
+    # Show ALL operators, splitting into multiple messages as needed
+    for i, op in enumerate(operators, 1):
         operator_name = op.get('operator_name', 'Unknown')
         operator_iata = op.get('operator_iata') or 'N/A'
         total_flights = op.get('total_flights', 0)
         destinations_served = op.get('destinations_served', [])
         aircraft_types = op.get('aircraft_types', [])
         
-        message += f"{i}. **{operator_name}** ({operator_iata})\n"
-        message += f"   ✈️ Flights: {total_flights:,}\n"
-        message += f"   🌍 Destinations: {', '.join(destinations_served[:5])}\n"  # Show up to 5 destinations
-        message += f"   🛩️ Aircraft: {', '.join(aircraft_types[:4])}\n"  # Show up to 4 aircraft types
-        message += "\n"
+        operator_text = f"{i}. **{operator_name}** ({operator_iata})\n"
+        operator_text += f"   ✈️ Flights: {total_flights:,}\n"
+        operator_text += f"   🌍 Destinations: {', '.join(destinations_served[:5])}\n"  # Show up to 5 destinations
+        operator_text += f"   🛩️ Aircraft: {', '.join(aircraft_types[:4])}\n"  # Show up to 4 aircraft types
+        operator_text += "\n"
+        
+        # Check if adding this operator would exceed Telegram's 4096 character limit
+        if len(current_message + operator_text) > 3800:  # Leave some buffer
+            messages.append(current_message)
+            current_message = f"🛬 **OPERATORS SERVING BOTH {dest_str}** (continued)\n\n" + operator_text
+        else:
+            current_message += operator_text
     
-    if len(operators) > display_limit:
-        message += f"💡 *Note: Showing top {display_limit} operators (out of {len(operators)} total)*\n"
+    # Add the last message
+    if current_message.strip():
+        messages.append(current_message)
     
-    return message
+    # Add summary to last message
+    if len(messages) > 1:
+        messages[-1] += f"\n✅ *Showing all {len(operators)} operators across {len(messages)} messages*"
+    
+    return messages
 
 def format_results_for_telegram(results: dict, function_name: str) -> str:
     """Format results for Telegram message."""
@@ -285,7 +301,7 @@ def format_results_for_telegram(results: dict, function_name: str) -> str:
     if function_name == "get_operators_by_destination" and "freighter_operators" in results:
         return format_enhanced_destination_results(results)
     
-    # Handle Function 9 format (multi-destination operators)
+    # Handle Function 9 format (multi-destination operators) - returns list for splitting
     if function_name == "get_operators_by_multi_destinations":
         return format_multi_destination_results(results)
     
@@ -627,13 +643,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Format and send results
         response_text = format_results_for_telegram(results, analysis["function_name"])
         
-        # Split long messages (Telegram has 4096 char limit)
-        if len(response_text) > 4000:
-            chunks = [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]
-            for chunk in chunks:
-                await update.message.reply_text(chunk)
+        # Handle Function 9 which returns list of messages for ALL results
+        if analysis["function_name"] == "get_operators_by_multi_destinations" and isinstance(response_text, list):
+            # Send all messages in sequence
+            for i, message in enumerate(response_text):
+                if i > 0:
+                    # Add small delay between messages to avoid rate limiting
+                    import asyncio
+                    await asyncio.sleep(0.5)
+                await update.message.reply_text(message, parse_mode='Markdown')
         else:
-            await update.message.reply_text(response_text)
+            # Standard message handling - split long messages (Telegram has 4096 char limit)
+            if len(response_text) > 4000:
+                chunks = [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]
+                for chunk in chunks:
+                    await update.message.reply_text(chunk)
+            else:
+                await update.message.reply_text(response_text)
             
     except Exception as e:
         logger.error(f"Error processing message: {e}")
