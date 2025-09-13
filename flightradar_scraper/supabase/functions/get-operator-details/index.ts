@@ -34,12 +34,15 @@ serve(async (req: Request) => {
       throw new Error("Request body is missing.")
     }
     // Expect search_query, operator_selection, start_time, end_time
+    const requestBody = await req.json()
+    console.log("Function 8 received request body:", JSON.stringify(requestBody))
+    
     const { 
       search_query, 
       operator_selection, 
       start_time = "2024-04-01", 
       end_time = "2025-05-31" 
-    } = await req.json()
+    } = requestBody
 
     // Basic validation
     if (!search_query && !operator_selection) {
@@ -60,11 +63,15 @@ serve(async (req: Request) => {
     connection = await pool.connect()
 
     // 6. Handle two modes: search or get details
+    console.log("Function 8 mode check - operator_selection:", operator_selection, "search_query:", search_query)
+    
     if (operator_selection) {
       // Mode 2: Get full operator details (after selection)
+      console.log("Function 8: Getting operator details for:", operator_selection)
       return await getOperatorDetails(connection, operator_selection, start_time, end_time)
     } else {
       // Mode 1: Search for operators (return selection list)
+      console.log("Function 8: Searching for operators with query:", search_query)
       return await searchOperators(connection, search_query)
     }
 
@@ -101,6 +108,8 @@ serve(async (req: Request) => {
  * Search for operators across IATA, ICAO, and name fields
  */
 async function searchOperators(connection: any, searchQuery: string) {
+  console.log("searchOperators called with query:", searchQuery)
+  
   const searchSql = `
     SELECT DISTINCT
         a.operator,
@@ -119,16 +128,21 @@ async function searchOperators(connection: any, searchQuery: string) {
     FROM aircraft a
     WHERE a.operator IS NOT NULL
       AND (
-        UPPER(a.operator_iata_code) LIKE CONCAT('%', UPPER($1), '%')
-        OR UPPER(a.operator_icao_code) LIKE CONCAT('%', UPPER($1), '%')
-        OR UPPER(a.operator) LIKE CONCAT('%', UPPER($1), '%')
+        a.operator_iata_code = $1
+        OR a.operator_icao_code = $1
+        OR UPPER(a.operator) LIKE UPPER($1)
       )
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
     ORDER BY aircraft_count DESC
     LIMIT 15;
   `
   
+  console.log("Executing search SQL with query:", searchQuery)
+  console.log("SQL:", searchSql)
+  
   const result = await connection.queryObject(searchSql, [searchQuery])
+  
+  console.log("Search SQL result:", result.rows.length, "rows found")
   
   if (result.rows.length === 0) {
     throw new Error(`No operators found matching "${searchQuery}"`)
