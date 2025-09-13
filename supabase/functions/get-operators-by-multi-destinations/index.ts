@@ -74,9 +74,7 @@ serve(async (req) => {
       connection = await pool.connect()
       console.log("Function 9: Database connection established")
 
-      // 6. Simplified SQL query to find operators serving multiple destinations
-      const placeholders = destination_codes.map((_, index) => `$${index + 3}`).join(', ')
-      
+      // 6. Much simpler SQL query - no subqueries or complex logic
       const simplifiedSql = `
         SELECT DISTINCT
           a.operator,
@@ -100,30 +98,19 @@ serve(async (req) => {
           ) THEN 1 END) as passenger_flights
         FROM movements m
         JOIN aircraft a ON m.registration = a.registration
-        WHERE m.destination_code IN (${placeholders})
+        WHERE m.destination_code = ANY($3)
           AND m.scheduled_departure >= $1
           AND m.scheduled_departure <= $2
           AND a.operator IS NOT NULL
         GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, m.destination_code
-        HAVING a.operator IN (
-          SELECT a2.operator
-          FROM movements m2
-          JOIN aircraft a2 ON m2.registration = a2.registration
-          WHERE m2.destination_code IN (${placeholders})
-            AND m2.scheduled_departure >= $1
-            AND m2.scheduled_departure <= $2
-            AND a2.operator IS NOT NULL
-          GROUP BY a2.operator
-          HAVING COUNT(DISTINCT m2.destination_code) >= $${destination_codes.length + 3}
-        )
         ORDER BY a.operator, m.destination_code
         LIMIT 200
       `
 
-      console.log("Function 9: Executing enhanced SQL query")
-      console.log("SQL parameters:", [start_time, end_time, ...destination_codes, min_dest])
+      console.log("Function 9: Executing simplified SQL query")
+      console.log("SQL parameters:", [start_time, end_time, destination_codes])
 
-      const result = await connection.queryObject(simplifiedSql, [start_time, end_time, ...destination_codes, min_dest])
+      const result = await connection.queryObject(simplifiedSql, [start_time, end_time, destination_codes])
       
       console.log("Function 9: Query executed successfully, rows returned:", result.rows.length)
 
@@ -140,7 +127,7 @@ serve(async (req) => {
         )
       }
 
-      // 7. Process and structure the simplified results
+      // 7. Process and filter results for multi-destination operators
       const operatorMap = new Map()
 
       for (const row of result.rows) {
@@ -174,8 +161,13 @@ serve(async (req) => {
         operator.total_passenger_flights += row.passenger_flights
       }
 
-      // 8. Convert to final response format
-      const operators = Array.from(operatorMap.values()).map(op => ({
+      // Filter to only operators serving the minimum required destinations
+      const filteredOperators = Array.from(operatorMap.values()).filter(op => 
+        op.destinations.size >= min_dest
+      )
+
+      // 8. Convert filtered operators to final response format
+      const operators = filteredOperators.map(op => ({
         operator: op.operator,
         operator_iata_code: op.operator_iata_code,
         operator_icao_code: op.operator_icao_code,
