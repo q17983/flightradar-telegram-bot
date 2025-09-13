@@ -91,6 +91,11 @@ FUNCTION_MAP = {
         "params": ["search_query", "operator_selection"],
         "description": "Search for operator details with fleet and route analysis"
     },
+    "get_operators_by_multi_destinations": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-multi-destinations",
+        "params": ["destination_codes", "start_time", "end_time"],
+        "description": "Find operators that serve multiple specified destinations"
+    }
 }
 
 async def analyze_query_with_gemini(user_query: str) -> dict:
@@ -116,6 +121,7 @@ Rules:
 - For "X Y frequency" → get_operator_frequency
 - For "[airline] regional origins" → get_operator_origins_by_region
 - For "multi-leg" or "complex routing" → calculate_multi_leg_route_metrics
+- For "operators to both X and Y" or "multiple destinations" → get_operators_by_multi_destinations (use destination_codes as array)
 
 Return JSON:
 {{
@@ -158,6 +164,11 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     # Debug: Log the credentials being used
     logger.info(f"Using SUPABASE_URL: {SUPABASE_URL}")
     logger.info(f"Using ANON_KEY (first 20 chars): {SUPABASE_ANON_KEY[:20] if SUPABASE_ANON_KEY else 'None'}...")
+    
+    # Special debug logging for Function 9
+    if function_name == "get_operators_by_multi_destinations":
+        logger.info(f"🔍 Function 9 Debug - Parameters received: {parameters}")
+        logger.info(f"🔍 Function 9 Debug - Parameter types: {[(k, type(v)) for k, v in parameters.items()]}")
     
     url = FUNCTION_MAP[function_name]["url"]
     headers = {
