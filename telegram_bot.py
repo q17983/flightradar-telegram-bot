@@ -9,8 +9,8 @@ import json
 import logging
 import asyncio
 import requests
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -85,6 +85,11 @@ FUNCTION_MAP = {
         "url": f"{SUPABASE_URL}/functions/v1/get-route-details",
         "params": ["origin_code", "destination_code", "start_time", "end_time"],
         "description": "Get detailed route information"
+    },
+    "get_operator_details": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operator-details",
+        "params": ["search_query", "operator_selection"],
+        "description": "Search for operator details with fleet and route analysis"
     }
 }
 
@@ -411,6 +416,13 @@ async def examples_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 • "Hub connectivity analysis"
 *→ Returns advanced routing calculations*
 
+🏢 *Operator Details (NEW!):*
+• "Operator details FX"
+• "Fleet breakdown Emirates"
+• "Show operator Lufthansa"
+• "Airline info EK"
+*→ Returns fleet breakdown + route analysis with clickable buttons*
+
 💼 *Business Scenarios:*
 • "Cargo options to Mumbai"
 • "Freighter routes from Amsterdam"
@@ -473,6 +485,13 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 💡 Example: "Complex routing via Dubai"
 📈 Returns: Advanced routing calculations
 
+📊 *Function 8: get-operator-details* (NEW!)
+🎯 Purpose: Operator fleet & route analysis
+📝 Usage: "Operator details [AIRLINE/IATA/ICAO]"
+💡 Example: "Operator details FX" or "Fleet breakdown Emirates"
+📈 Returns: Fleet breakdown + top destinations with clickable selection
+🔥 Features: Multi-search results, interactive buttons, detailed registrations
+
 🔧 *Technical Notes:*
 • All queries processed via Gemini AI
 • Automatic function selection
@@ -494,7 +513,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
-        # Analyze query with Gemini
+        # Check if this is an operator search query (Function 8)
+        if is_operator_search_query(user_query):
+            search_term = extract_operator_from_query(user_query)
+            if search_term:
+                await handle_operator_search(update, context, search_term)
+                return
+        
+        # Analyze query with Gemini for other functions
         analysis = await analyze_query_with_gemini(user_query)
         
         if not analysis:
@@ -532,6 +558,222 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "❌ Sorry, something went wrong. Please try again later or contact support."
         )
 
+# ============ Function 8: Operator Details with Clickable Buttons ============
+
+async def handle_operator_search(update: Update, context: ContextTypes.DEFAULT_TYPE, search_query: str) -> None:
+    """Handle operator search with clickable button interface."""
+    try:
+        # Call Function 8 in search mode
+        results = await call_supabase_function("get_operator_details", {"search_query": search_query})
+        
+        if results.get("result_type") == "search_results":
+            # Multiple operators found - show selection buttons
+            operators = results.get("operators_found", [])
+            
+            if not operators:
+                await update.message.reply_text(f"❌ No operators found matching '{search_query}'")
+                return
+            
+            # Create message text
+            message_text = f"🔍 **Search results for '{search_query}':**\n\n"
+            
+            # Create buttons for each operator
+            keyboard = []
+            for operator in operators:
+                # Get appropriate emoji based on operator type
+                emoji = get_operator_emoji(operator)
+                
+                # Create button text
+                iata = operator.get('operator_iata_code') or '--'
+                icao = operator.get('operator_icao_code') or '--'
+                button_text = f"{emoji} {operator['operator']} ({iata}/{icao})"
+                
+                # Add operator info to message
+                message_text += f"{emoji} **{operator['operator']}** ({iata}/{icao})\n"
+                message_text += f"   ✈️ {operator['aircraft_count']} aircraft ({operator['freighter_percentage']}% freighter)\n\n"
+                
+                # Create callback data for button
+                callback_data = f"select_operator_{operator['selection_id']}_{operator['operator']}"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+            
+            # Add additional buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Search Again", callback_data="search_again"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+            ])
+            
+            # Store search context for callback handling
+            context.user_data['operator_search'] = {
+                'query': search_query,
+                'operators': operators
+            }
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode='Markdown')
+            
+        else:
+            # Single operator or direct details
+            response_text = format_operator_details(results)
+            await update.message.reply_text(response_text, parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Error in operator search: {e}")
+        await update.message.reply_text(f"❌ Error searching for '{search_query}'. Please try again.")
+
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle button clicks from inline keyboards."""
+    query = update.callback_query
+    await query.answer()  # Acknowledge the button click
+    
+    try:
+        callback_data = query.data
+        
+        if callback_data.startswith("select_operator_"):
+            # Extract operator selection
+            parts = callback_data.split("_", 3)
+            if len(parts) >= 4:
+                selection_id = parts[2]
+                operator_name = parts[3]
+                
+                # Get full operator details
+                results = await call_supabase_function("get_operator_details", {"operator_selection": operator_name})
+                
+                # Format and display results
+                response_text = format_operator_details(results)
+                
+                # Edit the message to show full details
+                await query.edit_message_text(
+                    text=response_text,
+                    parse_mode='Markdown',
+                    reply_markup=create_details_keyboard()
+                )
+            
+        elif callback_data == "search_again":
+            await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code to search:")
+            
+        elif callback_data == "cancel":
+            await query.edit_message_text("❌ Search cancelled.")
+            
+        elif callback_data == "new_search":
+            await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code for new search:")
+            
+    except Exception as e:
+        logger.error(f"Error handling callback query: {e}")
+        await query.edit_message_text("❌ Error processing selection. Please try again.")
+
+def get_operator_emoji(operator: dict) -> str:
+    """Get appropriate emoji based on operator type."""
+    freighter_percentage = operator.get('freighter_percentage', 0)
+    
+    if freighter_percentage > 80:
+        return "🚛"  # Freighter
+    elif freighter_percentage > 20:
+        return "📦"  # Mixed
+    else:
+        return "✈️"  # Passenger
+
+def create_details_keyboard() -> InlineKeyboardMarkup:
+    """Create keyboard for operator details view."""
+    keyboard = [
+        [InlineKeyboardButton("🔄 New Search", callback_data="new_search")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def format_operator_details(results: dict) -> str:
+    """Format operator details for Telegram display."""
+    if results.get("result_type") != "operator_details":
+        return "❌ Invalid operator details format"
+    
+    operator_details = results.get("operator_details", {})
+    fleet_breakdown = results.get("fleet_breakdown", [])
+    fleet_summary = results.get("fleet_summary", {})
+    top_destinations = results.get("top_destinations", [])
+    
+    # Header
+    operator_name = operator_details.get("operator_name", "Unknown")
+    iata = operator_details.get("operator_iata_code") or "--"
+    icao = operator_details.get("operator_icao_code") or "--"
+    
+    message = f"✈️ **OPERATOR PROFILE: {operator_name.upper()} ({iata}/{icao})**\n"
+    message += f"📅 *Analysis Period: {operator_details.get('period_start')} to {operator_details.get('period_end')}*\n\n"
+    
+    # Fleet Summary
+    total_aircraft = fleet_summary.get("total_aircraft", 0)
+    freighter_pct = fleet_summary.get("freighter_percentage", 0)
+    passenger_pct = fleet_summary.get("passenger_percentage", 0)
+    unique_types = fleet_summary.get("unique_aircraft_types", 0)
+    
+    message += f"🚁 **FLEET SUMMARY**:\n"
+    message += f"📊 *Total Aircraft: {total_aircraft} ({freighter_pct}% freighter, {passenger_pct}% passenger)*\n"
+    message += f"🔢 *Aircraft Types: {unique_types} different models*\n\n"
+    
+    # Fleet Breakdown (show top 10)
+    if fleet_breakdown:
+        message += f"🛩️ **FLEET BREAKDOWN** (Top 10):\n"
+        for i, aircraft in enumerate(fleet_breakdown[:10], 1):
+            aircraft_type = aircraft.get("aircraft_type", "Unknown")
+            aircraft_details = aircraft.get("aircraft_details", "Unknown")
+            count = aircraft.get("count", 0)
+            category = aircraft.get("aircraft_category", "Unknown")
+            registrations = aircraft.get("registrations", [])
+            
+            # Show category emoji
+            category_emoji = "🚛" if category == "Freighter" else "✈️"
+            
+            message += f"{i}. **{aircraft_details}** ({count} aircraft) - {category} {category_emoji}\n"
+            
+            # Show first 5 registrations
+            if registrations:
+                reg_display = ", ".join(registrations[:5])
+                if len(registrations) > 5:
+                    reg_display += f"... (+{len(registrations) - 5} more)"
+                message += f"   • {reg_display}\n"
+        message += "\n"
+    
+    # Top Destinations (show top 10)
+    if top_destinations:
+        message += f"🌍 **TOP DESTINATIONS** (Top 10):\n"
+        for i, dest in enumerate(top_destinations[:10], 1):
+            dest_code = dest.get("destination_code", "Unknown")
+            total_flights = dest.get("total_flights", 0)
+            aircraft_types = dest.get("aircraft_types_used", [])
+            avg_monthly = dest.get("avg_flights_per_month", 0)
+            
+            message += f"{i}. **{dest_code}**: {total_flights:,} flights ({avg_monthly} avg/month)\n"
+            if aircraft_types:
+                types_display = ", ".join(aircraft_types[:3])  # Show first 3 aircraft types
+                message += f"   • Aircraft: {types_display}\n"
+        message += "\n"
+    
+    return message
+
+def is_operator_search_query(query: str) -> bool:
+    """Check if query is asking for operator details."""
+    operator_keywords = [
+        "operator details", "operator info", "fleet breakdown", "show operator",
+        "operator profile", "airline details", "carrier details", "airline info"
+    ]
+    
+    query_lower = query.lower()
+    return any(keyword in query_lower for keyword in operator_keywords)
+
+def extract_operator_from_query(query: str) -> str:
+    """Extract operator search term from query."""
+    # Remove common prefixes
+    prefixes_to_remove = [
+        "operator details", "operator info", "fleet breakdown", "show operator",
+        "operator profile", "airline details", "carrier details", "airline info",
+        "details for", "info for", "show", "get"
+    ]
+    
+    query_clean = query.lower()
+    for prefix in prefixes_to_remove:
+        if query_clean.startswith(prefix):
+            query_clean = query_clean[len(prefix):].strip()
+            break
+    
+    return query_clean.strip()
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log errors."""
     logger.error(f"Exception while handling an update: {context.error}")
@@ -549,6 +791,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("examples", examples_command))
     application.add_handler(CommandHandler("functions", functions_command))
+    application.add_handler(CallbackQueryHandler(handle_callback_query))  # Handle button clicks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
     
