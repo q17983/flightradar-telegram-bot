@@ -135,7 +135,7 @@ serve(async (req: Request) => {
         const operator = operatorDestinations.get(key)
         operator.destinations.add(flight.destination_code)
         operator.aircraft_types.add(flight.aircraft_type)
-        operator.total_flights += flight.frequency
+        operator.total_flights += Number(flight.frequency)
       })
 
       // 9. Filter operators that serve ALL specified destinations
