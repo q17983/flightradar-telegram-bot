@@ -121,7 +121,7 @@ Rules:
 - For "X Y frequency" → get_operator_frequency
 - For "[airline] regional origins" → get_operator_origins_by_region
 - For "multi-leg" or "complex routing" → calculate_multi_leg_route_metrics
-- For "operators to both X and Y" or "multiple destinations" → get_operators_by_multi_destinations (use destination_codes as array)
+- For "operators to both X and Y", "which operators fly to both", "carriers serving multiple", "multiple destinations" → get_operators_by_multi_destinations (use destination_codes as array)
 
 Return JSON:
 {{
@@ -153,6 +153,9 @@ Return JSON:
 
 async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     """Call Supabase Edge Function."""
+    
+    # Log ALL function calls to see what's being called
+    logger.info(f"🚀 CALLING FUNCTION: {function_name} with parameters: {parameters}")
     
     if function_name not in FUNCTION_MAP:
         return {"error": f"Unknown function: {function_name}"}
