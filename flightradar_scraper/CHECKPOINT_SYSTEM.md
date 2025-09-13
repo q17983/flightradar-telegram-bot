@@ -7,6 +7,7 @@ CHECKPOINT_002: "ENHANCED_FUNCTION_1_READY"
 CHECKPOINT_003: "ENHANCED_FUNCTION_1_COMPLETE"
 CHECKPOINT_004: "FUNCTION_8_START"
 CHECKPOINT_005: "FUNCTION_8_COMPLETE"
+CHECKPOINT_006: "FUNCTION_8_TELEGRAM_INTEGRATION"
 
 ## How to Use
 
@@ -23,3 +24,4 @@ To restore to a checkpoint:
 - **CHECKPOINT_003**: Enhanced Function 1 complete with display customization
 - **CHECKPOINT_004**: Starting Function 8 (operator details) development
 - **CHECKPOINT_005**: Function 8 complete - Cross-field search, fleet analysis, route analysis working
+- **CHECKPOINT_006**: Function 8 fully integrated with Telegram bot - Clickable buttons, operator search detection, Railway deployment complete

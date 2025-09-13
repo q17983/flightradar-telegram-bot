@@ -11,7 +11,7 @@
 | **5. get-operators-by-origin** | ⏳ **PENDING** | None | - | Ready for enhancement |
 | **6. get-route-details** | ⏳ **PENDING** | None | - | Ready for enhancement |
 | **7. calculate-multi-leg-route-metrics** | ⏳ **PENDING** | None | - | Ready for enhancement |
-| **8. get-operator-details** | ✅ **COMPLETE** | **FULL** | Sep 13, 2025 | Cross-field search, fleet breakdown, route analysis |
+| **8. get-operator-details** | ✅ **DEPLOYED** | **FULL** | Sep 13, 2025 | Cross-field search, fleet breakdown, route analysis, Telegram buttons |
 
 ---
 
