@@ -107,7 +107,6 @@ async function searchOperators(connection: any, searchQuery: string) {
         a.operator_iata_code,
         a.operator_icao_code,
         COUNT(*) as aircraft_count,
-        -- Calculate freighter percentage
         ROUND(
             (COUNT(CASE WHEN 
                 UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
@@ -116,32 +115,16 @@ async function searchOperators(connection: any, searchQuery: string) {
                 OR UPPER(a.aircraft_details) LIKE '%BCF%'
                 OR UPPER(a.aircraft_details) LIKE '%SF%'
             THEN 1 END) * 100.0 / COUNT(*)), 0
-        ) as freighter_percentage,
-        -- Determine match type for ranking
-        CASE 
-            WHEN UPPER(COALESCE(a.operator_iata_code, '')) = UPPER($1) THEN 1
-            WHEN UPPER(COALESCE(a.operator_icao_code, '')) = UPPER($1) THEN 2  
-            WHEN UPPER(a.operator) = UPPER($1) THEN 3
-            WHEN UPPER(a.operator) LIKE UPPER($1) || '%' THEN 4
-            WHEN UPPER(a.operator) LIKE '%' || UPPER($1) || '%' THEN 5
-            WHEN UPPER(COALESCE(a.operator_iata_code, '')) LIKE '%' || UPPER($1) || '%' THEN 6
-            WHEN UPPER(COALESCE(a.operator_icao_code, '')) LIKE '%' || UPPER($1) || '%' THEN 7
-            ELSE 8
-        END as match_rank
+        ) as freighter_percentage
     FROM aircraft a
     WHERE a.operator IS NOT NULL
       AND (
-        -- Search IATA code
-        UPPER(COALESCE(a.operator_iata_code, '')) LIKE '%' || UPPER($1) || '%'
-        OR
-        -- Search ICAO code  
-        UPPER(COALESCE(a.operator_icao_code, '')) LIKE '%' || UPPER($1) || '%'
-        OR
-        -- Search operator name
-        UPPER(a.operator) LIKE '%' || UPPER($1) || '%'
+        UPPER(a.operator_iata_code) LIKE CONCAT('%', UPPER($1), '%')
+        OR UPPER(a.operator_icao_code) LIKE CONCAT('%', UPPER($1), '%')
+        OR UPPER(a.operator) LIKE CONCAT('%', UPPER($1), '%')
       )
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
-    ORDER BY match_rank ASC, aircraft_count DESC
+    ORDER BY aircraft_count DESC
     LIMIT 15;
   `
   
