@@ -157,6 +157,9 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     # Log ALL function calls to see what's being called
     logger.info(f"🚀 CALLING FUNCTION: {function_name} with parameters: {parameters}")
     
+    # TEMPORARY: Add debug info to help user see what function is being called
+    print(f"DEBUG: About to call {function_name} with {parameters}")
+    
     if function_name not in FUNCTION_MAP:
         return {"error": f"Unknown function: {function_name}"}
     
@@ -185,7 +188,9 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
         if response.status_code == 200:
             return response.json()
         else:
-            return {"error": f"HTTP {response.status_code}: {response.text}"}
+            # Add debug info to error message
+            debug_info = f"[DEBUG: Called {function_name} with {list(parameters.keys())}]"
+            return {"error": f"HTTP {response.status_code}: {response.text} {debug_info}"}
             
     except Exception as e:
         return {"error": f"Request failed: {str(e)}"}
