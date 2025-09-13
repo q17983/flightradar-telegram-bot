@@ -91,11 +91,6 @@ FUNCTION_MAP = {
         "params": ["search_query", "operator_selection"],
         "description": "Search for operator details with fleet and route analysis"
     },
-    "get_operators_by_multi_destinations": {
-        "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-multi-destinations",
-        "params": ["destination_codes", "minimum_destinations", "start_time", "end_time"],
-        "description": "Find operators that serve multiple specified destinations"
-    }
 }
 
 async def analyze_query_with_gemini(user_query: str) -> dict:
@@ -428,12 +423,6 @@ async def examples_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 • "Airline info EK"
 *→ Returns fleet breakdown + route analysis with clickable buttons*
 
-🌐 *Multi-Destination Analysis:*
-• "Which operators fly to both HKG and JFK?"
-• "Show carriers serving LAX, NRT, and LHR"
-• "Find operators flying to multiple European hubs"
-• "Operators connecting Asia and America"
-
 💼 *Business Scenarios:*
 • "Cargo options to Mumbai"
 • "Freighter routes from Amsterdam"
@@ -502,13 +491,6 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 💡 Example: "Operator details FX" or "Fleet breakdown Emirates"
 📈 Returns: Fleet breakdown + top destinations with clickable selection
 🔥 Features: Multi-search results, interactive buttons, detailed registrations
-
-📊 *Function 9: get-operators-by-multi-destinations* (LATEST!)
-🎯 Purpose: Multi-destination carrier analysis
-📝 Usage: "Which operators fly to [DEST1] and [DEST2]?"
-💡 Example: "Which operators fly to both HKG and JFK?"
-📈 Returns: Operators serving multiple destinations with freighter/passenger breakdown
-🔥 Features: Cross-destination analysis, frequency comparison, aircraft details
 
 🔧 *Technical Notes:*
 • All queries processed via Gemini AI
