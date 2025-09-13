@@ -268,10 +268,34 @@ def format_multi_destination_results(results: dict) -> list:
         destinations_served = op.get('destinations_served', [])
         aircraft_types = op.get('aircraft_types', [])
         
+        # Get enhanced data if available
+        freighter_flights = op.get('freighter_flights', 0)
+        passenger_flights = op.get('passenger_flights', 0)
+        freighter_percentage = op.get('freighter_percentage', 0)
+        passenger_percentage = op.get('passenger_percentage', 0)
+        freighter_aircraft = op.get('freighter_aircraft', [])
+        passenger_aircraft = op.get('passenger_aircraft', [])
+        
         operator_text = f"{i}. **{operator_name}** ({operator_iata})\n"
-        operator_text += f"   ✈️ Flights: {total_flights:,}\n"
+        operator_text += f"   ✈️ Total: {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n"
+        
+        # Show freighter breakdown if available
+        if freighter_flights > 0:
+            operator_text += f"   🚛 Freight: {freighter_flights:,} flights"
+            if freighter_aircraft:
+                operator_text += f" ({', '.join(freighter_aircraft[:3])})\n"
+            else:
+                operator_text += "\n"
+        
+        # Show passenger breakdown if available  
+        if passenger_flights > 0:
+            operator_text += f"   ✈️ Passenger: {passenger_flights:,} flights"
+            if passenger_aircraft:
+                operator_text += f" ({', '.join(passenger_aircraft[:3])})\n"
+            else:
+                operator_text += "\n"
+        
         operator_text += f"   🌍 Destinations: {', '.join(destinations_served[:5])}\n"  # Show up to 5 destinations
-        operator_text += f"   🛩️ Aircraft: {', '.join(aircraft_types[:4])}\n"  # Show up to 4 aircraft types
         operator_text += "\n"
         
         # Check if adding this operator would exceed Telegram's 4096 character limit

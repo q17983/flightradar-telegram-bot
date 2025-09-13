@@ -82,14 +82,23 @@ serve(async (req: Request) => {
             a.aircraft_details,
             m.destination_code,
             m.destination_name,
-            COUNT(m.id) as frequency
+            COUNT(m.id) as frequency,
+            CASE 
+                WHEN UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+                  OR UPPER(a.aircraft_details) LIKE '%-F%'
+                  OR UPPER(a.aircraft_details) LIKE '%CARGO%'
+                  OR UPPER(a.aircraft_details) LIKE '%BCF%'
+                  OR UPPER(a.aircraft_details) LIKE '%SF%'
+                THEN 'Freighter'
+                ELSE 'Passenger'
+            END as aircraft_category
         FROM movements m
         JOIN aircraft a ON m.registration = a.registration
         WHERE m.destination_code IN (${destinationPlaceholders})
           AND m.scheduled_departure >= $1
           AND m.scheduled_departure <= $${destination_codes.length + 2}
           AND a.operator IS NOT NULL
-        GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, a.type, a.aircraft_details, m.destination_code, m.destination_name
+        GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, a.type, a.aircraft_details, m.destination_code, m.destination_name, aircraft_category
         ORDER BY a.operator, frequency DESC;
       `
       
@@ -117,7 +126,7 @@ serve(async (req: Request) => {
         )
       }
 
-      // 8. Group by operator and count unique destinations served
+      // 8. Group by operator and separate freighter/passenger operations
       const operatorDestinations = new Map()
       
       queryResult.rows.forEach(flight => {
@@ -127,27 +136,54 @@ serve(async (req: Request) => {
             operator_iata: flight.operator_iata_code,
             operator_name: flight.operator,
             destinations: new Set(),
-            aircraft_types: new Set(),
+            freighter_flights: 0,
+            passenger_flights: 0,
+            freighter_aircraft: new Set(),
+            passenger_aircraft: new Set(),
             total_flights: 0
           })
         }
         
         const operator = operatorDestinations.get(key)
         operator.destinations.add(flight.destination_code)
-        operator.aircraft_types.add(flight.aircraft_type)
         operator.total_flights += Number(flight.frequency)
+        
+        // Separate freighter and passenger operations
+        if (flight.aircraft_category === 'Freighter') {
+          operator.freighter_flights += Number(flight.frequency)
+          operator.freighter_aircraft.add(flight.aircraft_type)
+        } else {
+          operator.passenger_flights += Number(flight.frequency)
+          operator.passenger_aircraft.add(flight.aircraft_type)
+        }
       })
 
-      // 9. Filter operators that serve ALL specified destinations
+      // 9. Filter operators that serve ALL specified destinations and format results
       const multiDestinationOperators = Array.from(operatorDestinations.values())
         .filter(operator => operator.destinations.size >= destination_codes.length)
-        .map(operator => ({
-          operator_iata: operator.operator_iata,
-          operator_name: operator.operator_name,
-          destinations_served: Array.from(operator.destinations),
-          aircraft_types: Array.from(operator.aircraft_types),
-          total_flights: operator.total_flights
-        }))
+        .map(operator => {
+          const freighter_percentage = operator.total_flights > 0 
+            ? Math.round((operator.freighter_flights / operator.total_flights) * 100) 
+            : 0
+          const passenger_percentage = 100 - freighter_percentage
+          
+          return {
+            operator_iata: operator.operator_iata,
+            operator_name: operator.operator_name,
+            destinations_served: Array.from(operator.destinations),
+            total_flights: operator.total_flights,
+            freighter_flights: operator.freighter_flights,
+            passenger_flights: operator.passenger_flights,
+            freighter_percentage,
+            passenger_percentage,
+            freighter_aircraft: Array.from(operator.freighter_aircraft),
+            passenger_aircraft: Array.from(operator.passenger_aircraft),
+            aircraft_breakdown: {
+              freighter: Array.from(operator.freighter_aircraft),
+              passenger: Array.from(operator.passenger_aircraft)
+            }
+          }
+        })
         .sort((a, b) => b.total_flights - a.total_flights)
 
       console.log("✅ Found", multiDestinationOperators.length, "operators serving multiple destinations")
