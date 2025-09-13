@@ -23,15 +23,38 @@ serve(async (req: Request) => {
   try {
     console.log("Function 9: Starting request processing...")
     
-    // 2. Parse incoming request body
+    // SPECIAL TEST MODE: If no body provided, return test data
     if (!req.body) {
-      console.error("Function 9: No request body")
-      throw new Error("Request body is missing.")
+      console.log("Function 9: No request body - returning test mode response")
+      return new Response(
+        JSON.stringify({
+          test_mode: true,
+          message: "Function 9 is running and can return responses!",
+          function_status: "WORKING",
+          next_step: "Test with actual parameters"
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
     
     console.log("Function 9: About to parse JSON...")
     const requestData = await req.json()
     console.log("Function 9: Parsed JSON successfully:", requestData)
+    
+    // SPECIAL TEST: If request contains "test_mode", return hard-coded success
+    if (requestData.test_mode === true) {
+      console.log("Function 9: Test mode activated - returning hard-coded success")
+      return new Response(
+        JSON.stringify({
+          test_mode: true,
+          message: "Function 9 can successfully process JSON requests!",
+          received_data: requestData,
+          function_status: "JSON_PARSING_WORKS",
+          next_step: "Test with real destination codes"
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     
     const { destination_codes, start_time, end_time } = requestData
 
