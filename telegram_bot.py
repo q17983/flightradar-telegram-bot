@@ -236,6 +236,45 @@ def format_enhanced_destination_results(results: dict) -> str:
     
     return message
 
+def format_multi_destination_results(results: dict) -> str:
+    """Format Function 9 multi-destination operator results."""
+    
+    if "error" in results:
+        return f"❌ Error: {results['error']}"
+    
+    operators = results.get("operators", [])
+    destination_codes = results.get("destination_codes", [])
+    summary = results.get("summary", {})
+    
+    if not operators:
+        dest_str = " and ".join(destination_codes)
+        return f"📭 No operators found serving both {dest_str}."
+    
+    dest_str = " and ".join(destination_codes)
+    message = f"🛬 **OPERATORS SERVING BOTH {dest_str}**\n"
+    message += f"📅 *Period: {results.get('time_range', {}).get('start_time')} to {results.get('time_range', {}).get('end_time')}*\n"
+    message += f"📊 *Found: {summary.get('total_operators', 0)} operators*\n\n"
+    
+    # Show top operators (limit to 20 for readability)
+    display_limit = min(20, len(operators))
+    for i, op in enumerate(operators[:display_limit], 1):
+        operator_name = op.get('operator_name', 'Unknown')
+        operator_iata = op.get('operator_iata') or 'N/A'
+        total_flights = op.get('total_flights', 0)
+        destinations_served = op.get('destinations_served', [])
+        aircraft_types = op.get('aircraft_types', [])
+        
+        message += f"{i}. **{operator_name}** ({operator_iata})\n"
+        message += f"   ✈️ Flights: {total_flights:,}\n"
+        message += f"   🌍 Destinations: {', '.join(destinations_served[:5])}\n"  # Show up to 5 destinations
+        message += f"   🛩️ Aircraft: {', '.join(aircraft_types[:4])}\n"  # Show up to 4 aircraft types
+        message += "\n"
+    
+    if len(operators) > display_limit:
+        message += f"💡 *Note: Showing top {display_limit} operators (out of {len(operators)} total)*\n"
+    
+    return message
+
 def format_results_for_telegram(results: dict, function_name: str) -> str:
     """Format results for Telegram message."""
     
@@ -245,6 +284,10 @@ def format_results_for_telegram(results: dict, function_name: str) -> str:
     # Handle enhanced Function 1 format (with freighter/passenger breakdown)
     if function_name == "get_operators_by_destination" and "freighter_operators" in results:
         return format_enhanced_destination_results(results)
+    
+    # Handle Function 9 format (multi-destination operators)
+    if function_name == "get_operators_by_multi_destinations":
+        return format_multi_destination_results(results)
     
     if "results" not in results or not results["results"]:
         return "📭 No results found for your query."
