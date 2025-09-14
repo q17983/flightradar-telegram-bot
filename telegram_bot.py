@@ -59,47 +59,51 @@ except Exception as e:
     logger.error(f"❌ Error initializing Gemini: {e}")
     exit()
 
-# Function mapping for Supabase Edge Functions
+# Core Function mapping for Supabase Edge Functions (Primary 4 Functions)
 FUNCTION_MAP = {
-    "get_operator_frequency": {
-        "url": f"{SUPABASE_URL}/functions/v1/get-operator-frequency",
-        "params": ["origin_code", "destination_code", "start_time", "end_time"],
-        "description": "Get frequency of operators flying a specific route"
-    },
     "get_operators_by_destination": {
         "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-destination",
         "params": ["destination_code", "start_time", "end_time"],
-        "description": "Get operators flying TO a destination"
-    },
-    "get_operators_by_origin": {
-        "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-origin",
-        "params": ["origin_code", "start_time", "end_time"],
-        "description": "Get operators flying FROM an origin"
-    },
-    "get_operator_route_summary": {
-        "url": f"{SUPABASE_URL}/functions/v1/get-operator-route-summary",
-        "params": ["operator_name", "start_time", "end_time"],
-        "description": "Get route summary for a specific operator"
-    },
-    "get_route_details": {
-        "url": f"{SUPABASE_URL}/functions/v1/get-route-details",
-        "params": ["origin_code", "destination_code", "start_time", "end_time"],
-        "description": "Get detailed route information"
+        "description": "Function 1: Get operators flying TO a specific airport"
     },
     "get_operator_details": {
         "url": f"{SUPABASE_URL}/functions/v1/get-operator-details",
         "params": ["search_query", "operator_selection"],
-        "description": "Search for operator details with fleet and route analysis"
+        "description": "Function 8: Search for operator details with fleet and route analysis"
     },
     "get_operators_by_multi_destinations": {
         "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-multi-destinations",
         "params": ["destination_codes", "start_time", "end_time"],
-        "description": "Find operators that serve multiple specified destinations"
+        "description": "Function 9: Find operators that serve multiple specified airports"
     },
     "get_operators_by_geographic_locations": {
         "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-geographic-locations",
         "params": ["first_location_type", "first_location_value", "second_location_type", "second_location_value", "start_time", "end_time"],
-        "description": "Find operators serving multiple geographic locations (airports, countries, continents)"
+        "description": "Function 10: Find operators serving between countries/continents/airports"
+    }
+}
+
+# Backup Functions (Functions 2-7) - Available but not actively promoted
+BACKUP_FUNCTION_MAP = {
+    "get_operator_frequency": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operator-frequency",
+        "params": ["origin_code", "destination_code", "start_time", "end_time"],
+        "description": "Function 5: Get frequency of operators flying a specific route"
+    },
+    "get_operators_by_origin": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-origin",
+        "params": ["origin_code", "start_time", "end_time"],
+        "description": "Function 2: Get operators flying FROM an origin"
+    },
+    "get_operator_route_summary": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operator-route-summary",
+        "params": ["operator_name", "start_time", "end_time"],
+        "description": "Function 3: Get route summary for a specific operator"
+    },
+    "get_route_details": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-route-details",
+        "params": ["origin_code", "destination_code", "start_time", "end_time"],
+        "description": "Function 4: Get detailed route information"
     }
 }
 
@@ -107,29 +111,40 @@ async def analyze_query_with_gemini(user_query: str) -> dict:
     """Use Gemini to analyze user query and determine intent."""
     
     prompt = f"""
-You are a flight data assistant for a cargo charter broker. Analyze this query and return the best function to call.
+You are a flight data assistant for a cargo charter broker. Analyze this query and return the best function to call from the 4 CORE FUNCTIONS only.
 
-Available functions:
+CORE FUNCTIONS ONLY:
 {json.dumps(FUNCTION_MAP, indent=2)}
 
 User query: "{user_query}"
 
-Rules:
-- Use IATA airport codes (3-letter) like LAX, JFK, LHR, DXB
-- CRITICAL: ALWAYS use the full database range: start_time: "2024-04-01", end_time: "2025-05-31"
+CRITICAL RULES:
+- ALWAYS use the full database range: start_time: "2024-04-01", end_time: "2025-05-31"
 - IGNORE any specific dates mentioned by user - always use the full 408-day period
-- The database contains Apr 2024 - May 2025 data, so ALWAYS query the complete range
-- For "who flies to X" → get_operators_by_destination
-- For "routes from X" → get_operators_by_origin  
-- For "[airline] routes" → get_operator_route_summary
-- For "X to Y details" → get_route_details
-- For "X Y frequency" → get_operator_frequency
-- For "[airline] regional origins" → get_operator_origins_by_region
-- For "multi-leg" or "complex routing" → calculate_multi_leg_route_metrics
-- For "operators to both X and Y", "which operators fly to both", "carriers serving multiple", "multiple destinations" → get_operators_by_multi_destinations (use destination_codes as array)
-- For geographic queries like "China to SCL", "JFK to Asia", "operators from Europe to Japan", "country to airport", "continent to country" → get_operators_by_geographic_locations
-  * Detect location types: airports (3-letter codes), countries (full names), continents (Asia, Europe, North America, South America, Africa, Oceania)
-  * Parameters: first_location_type, first_location_value, second_location_type, second_location_value
+- Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL
+- Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
+
+COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
+- Korea/Korean → "Korea" (NOT Japan/JPN)
+- China/Chinese → "China"
+- Japan/Japanese → "Japan"  
+- Thailand/Thai → "Thailand"
+- Germany/German → "Germany"
+- Continents: Asia, Europe, North America, South America, Africa, Oceania
+
+FUNCTION SELECTION LOGIC:
+1. "who flies to [AIRPORT]" → get_operators_by_destination
+   Example: "who flies to LAX" → destination_code: "LAX"
+
+2. "operator details [NAME]" or "show operator [NAME]" → get_operator_details
+   Example: "operator details FedEx" → search_query: "FedEx"
+
+3. "operators to both [X] and [Y]" or "which operators fly to both" → get_operators_by_multi_destinations
+   Example: "operators to both JFK and LAX" → destination_codes: ["JFK", "LAX"]
+
+4. "[LOCATION] to [LOCATION] operators" or geographic queries → get_operators_by_geographic_locations
+   Example: "Korea to Japan operators" → first_location_type: "country", first_location_value: "Korea", second_location_type: "country", second_location_value: "Japan"
+   Example: "China to SCL operators" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "SCL"
 
 Return JSON:
 {{
@@ -168,7 +183,12 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     # TEMPORARY: Add debug info to help user see what function is being called
     print(f"DEBUG: About to call {function_name} with {parameters}")
     
-    if function_name not in FUNCTION_MAP:
+    # Check both core and backup functions
+    if function_name in FUNCTION_MAP:
+        function_config = FUNCTION_MAP[function_name]
+    elif function_name in BACKUP_FUNCTION_MAP:
+        function_config = BACKUP_FUNCTION_MAP[function_name]
+    else:
         return {"error": f"Unknown function: {function_name}"}
     
     # FORCE the correct date range regardless of what Gemini suggests
@@ -184,7 +204,7 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
         logger.info(f"🔍 Function 9 Debug - Parameters received: {parameters}")
         logger.info(f"🔍 Function 9 Debug - Parameter types: {[(k, type(v)) for k, v in parameters.items()]}")
     
-    url = FUNCTION_MAP[function_name]["url"]
+    url = function_config["url"]
     headers = {
         "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
         "Content-Type": "application/json"
@@ -598,62 +618,44 @@ Just ask me about any destination or airline! 🚀
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show help information."""
     help_text = """
-🆘 *HELP - Complete Function Guide*
+🆘 *HELP - Core Functions Guide*
 
-📊 *Available Functions (Apr 2024 - May 2025):*
+📊 *CORE FUNCTIONS (Apr 2024 - May 2025):*
 
-🎯 *1. Find Carriers by Destination*
+🎯 *Function 1: Find Carriers by Destination*
 • "Who flies to LAX?"
 • "Carriers to Dubai"
 • "Hong Kong flights"
-*Gets all airlines serving a destination*
+*Gets all airlines serving a destination with freight/passenger breakdown*
 
-🛫 *2. Find Routes from Origin*
-• "Routes from JFK"
-• "London departures"  
-• "Tokyo flights"
-*Gets all destinations from an origin*
+🔍 *Function 8: Operator Details*
+• "Operator details FedEx"
+• "Show operator Emirates"
+• "Airline info Lufthansa"
+*Complete fleet breakdown + route analysis with clickable buttons*
 
-✈️ *3. Airline Route Analysis*
-• "Emirates routes"
-• "FedEx destinations"
-• "Cathay Pacific"
-*Gets complete route map for an airline*
+🌐 *Function 9: Multi-Destination Operators*
+• "Operators to both JFK and LAX"
+• "Which operators fly to both Dubai and Singapore"
+• "Carriers serving multiple destinations"
+*Find operators serving multiple specified airports*
 
-🔍 *4. Specific Route Details*
-• "JFK to LAX route details"
-• "London to New York flights"
-• "Dubai to Frankfurt details"
-*Gets carriers & frequencies for specific routes*
-
-📈 *5. Route Frequency Analysis*
-• "JFK LAX frequency"
-• "Dubai London frequency"
-*Gets detailed frequency data between two airports*
-
-🌍 *6. Regional Origin Analysis*
-• "Emirates origins by region"
-• "FedEx regional origins"
-*Gets airline origins grouped by geographic regions*
-
-⚡ *7. Multi-leg Route Metrics*
-• "Multi-leg route via Dubai"
-• "Complex routing analysis"
-*Advanced routing calculations for multiple stops*
-
-🌍 *8. Geographic Operator Analysis*
+🌍 *Function 10: Geographic Operator Analysis*
 • "China to SCL operators"
+• "Korea to Japan operators"
 • "JFK to Asia carriers"
-• "Europe to Japan flights"
-• "Operators from North America to Thailand"
-*Find operators serving airports, countries, or continents*
+• "Europe to Thailand operators"
+*Find operators serving between countries/continents/airports*
 
 💡 *Usage Tips:*
-• Use 3-letter IATA codes (LAX, JFK, LHR, DXB)
+• Use 3-letter IATA codes (LAX, JFK, LHR, DXB, SCL)
+• Use exact country names: "Korea" not "Korean", "China" not "Chinese"
 • Data covers Apr 2024 - May 2025 (408 days)
-• Shows up to 50 results per query
-• Be specific about airlines and airports
+• All functions show comprehensive results
 • Type /examples for more query examples
+
+🔧 *Advanced Functions:*
+Functions 2-7 are available but not actively promoted. Focus on the 4 core functions above for best results.
 """
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
