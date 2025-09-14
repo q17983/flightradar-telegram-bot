@@ -323,11 +323,15 @@ def format_multi_destination_results(results: dict) -> list:
     
     return messages
 
-def format_geographic_operator_results(results: dict) -> list:
-    """Format Function 10 geographic operator results with detailed aircraft breakdown."""
+def format_geographic_operator_results(results: dict) -> dict:
+    """Format Function 10 geographic operator results with detailed aircraft breakdown.
+    
+    Returns:
+        dict: Contains 'messages' (list) and 'operators' (list) for keyboard creation
+    """
     
     if "error" in results:
-        return [f"❌ Error: {results['error']}"]
+        return {"messages": [f"❌ Error: {results['error']}"], "operators": []}
     
     operators = results.get("operators", [])
     search_criteria = results.get("search_criteria", {})
@@ -366,6 +370,7 @@ def format_geographic_operator_results(results: dict) -> list:
         freighter_percentage = op.get('freighter_percentage', 0)
         passenger_percentage = op.get('passenger_percentage', 0)
         
+        # Create clickable operator name that triggers Function 8
         operator_text = f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
         operator_text += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n"
         
@@ -403,11 +408,26 @@ def format_geographic_operator_results(results: dict) -> list:
     if current_message.strip():
         messages.append(current_message)
     
-    # Add footer to last message
-    if messages:
-        messages[-1] += f"\n💡 *Reply with operator number (1-{min(10, len(operators))}) for detailed fleet breakdown*"
+    # Collect operator info for clickable buttons (top 10 operators)
+    operator_buttons = []
+    for i, op in enumerate(operators[:10], 1):
+        operator_name = op.get('operator', 'Unknown')
+        operator_iata = op.get('operator_iata_code') or 'N/A'
+        operator_icao = op.get('operator_icao_code') or 'N/A'
+        total_flights = op.get('total_flights', 0)
+        
+        operator_buttons.append({
+            'name': operator_name,
+            'iata': operator_iata,
+            'icao': operator_icao,
+            'flights': total_flights,
+            'button_text': f"{i}. {operator_name} ({operator_iata}) - {total_flights:,} flights"
+        })
     
-    return messages
+    return {
+        "messages": messages,
+        "operators": operator_buttons
+    }
 
 def format_results_for_telegram(results: dict, function_name: str):
     """Format results for Telegram message.
@@ -785,8 +805,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Format and send results
         response_text = format_results_for_telegram(results, analysis["function_name"])
         
-        # Handle Functions 9 & 10 which return list of messages for ALL results
-        if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"] and isinstance(response_text, list):
+        # Handle Function 9 which returns list of messages
+        if analysis["function_name"] == "get_operators_by_multi_destinations" and isinstance(response_text, list):
             # Send all messages in sequence
             for i, message in enumerate(response_text):
                 if i > 0:
@@ -794,6 +814,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     import asyncio
                     await asyncio.sleep(0.5)
                 await update.message.reply_text(message, parse_mode='Markdown')
+        
+        # Handle Function 10 which returns dict with messages and operators for clickable buttons
+        elif analysis["function_name"] == "get_operators_by_geographic_locations" and isinstance(response_text, dict):
+            messages = response_text.get("messages", [])
+            operators = response_text.get("operators", [])
+            
+            # Send all messages in sequence
+            for i, message in enumerate(messages):
+                if i > 0:
+                    # Add small delay between messages to avoid rate limiting
+                    import asyncio
+                    await asyncio.sleep(0.5)
+                
+                # Add keyboard to the last message if we have operators
+                if i == len(messages) - 1 and operators:
+                    keyboard = []
+                    for op in operators:
+                        callback_data = f"select_operator_geo_{op['name']}"
+                        keyboard.append([InlineKeyboardButton(op['button_text'], callback_data=callback_data)])
+                    
+                    # Add additional buttons
+                    keyboard.append([
+                        InlineKeyboardButton("🔍 Search Again", callback_data="search_again"),
+                        InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+                    ])
+                    
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await update.message.reply_text(message, parse_mode='Markdown')
         else:
             # Standard message handling - split long messages (Telegram has 4096 char limit)
             if len(response_text) > 4000:
@@ -880,24 +930,31 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         callback_data = query.data
         
         if callback_data.startswith("select_operator_"):
-            # Extract operator selection
-            parts = callback_data.split("_", 3)
-            if len(parts) >= 4:
-                selection_id = parts[2]
-                operator_name = parts[3]
-                
-                # Get full operator details
-                results = await call_supabase_function("get_operator_details", {"operator_selection": operator_name})
-                
-                # Format and display results
-                response_text = format_operator_details(results)
-                
-                # Edit the message to show full details
-                await query.edit_message_text(
-                    text=response_text,
-                    parse_mode='Markdown',
-                    reply_markup=create_details_keyboard()
-                )
+            # Handle both regular operator selection and geographic operator selection
+            if callback_data.startswith("select_operator_geo_"):
+                # Geographic operator selection (Function 10)
+                operator_name = callback_data.replace("select_operator_geo_", "")
+            else:
+                # Regular operator selection (Function 8 search)
+                parts = callback_data.split("_", 3)
+                if len(parts) >= 4:
+                    selection_id = parts[2]
+                    operator_name = parts[3]
+                else:
+                    return
+            
+            # Get full operator details using Function 8
+            results = await call_supabase_function("get_operator_details", {"operator_selection": operator_name})
+            
+            # Format and display results
+            response_text = format_operator_details(results)
+            
+            # Edit the message to show full details
+            await query.edit_message_text(
+                text=response_text,
+                parse_mode='Markdown',
+                reply_markup=create_details_keyboard()
+            )
             
         elif callback_data == "search_again":
             await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code to search:")
