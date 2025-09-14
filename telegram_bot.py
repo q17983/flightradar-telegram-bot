@@ -359,10 +359,10 @@ def format_geographic_operator_results(results: dict) -> dict:
     header += f"🏆 **TOP OPERATORS:**\n\n"
     
     messages = []
-    current_message = header
     
-    # Show top operators with fleet details
-    for i, op in enumerate(operators[:10], 1):  # Show top 10 operators
+    # Message 1: Summary + Top 5 operators (basic info only)
+    message1 = header
+    for i, op in enumerate(operators[:5], 1):  # Top 5 operators for first message
         operator_name = op.get('operator', 'Unknown')
         operator_iata = op.get('operator_iata_code') or 'N/A'
         operator_icao = op.get('operator_icao_code') or 'N/A'
@@ -370,43 +370,69 @@ def format_geographic_operator_results(results: dict) -> dict:
         freighter_percentage = op.get('freighter_percentage', 0)
         passenger_percentage = op.get('passenger_percentage', 0)
         
-        # Create clickable operator name that triggers Function 8
-        operator_text = f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
-        operator_text += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n"
-        
-        # Show fleet breakdown
-        fleet_breakdown = op.get('fleet_breakdown', {})
-        freighter_aircraft = fleet_breakdown.get('freighter_aircraft', [])
-        passenger_aircraft = fleet_breakdown.get('passenger_aircraft', [])
-        
-        # Show top freighter aircraft
-        if freighter_aircraft:
-            operator_text += f"   🚛 **Freighter Fleet:**\n"
-            for aircraft in freighter_aircraft[:3]:  # Top 3 freighter types
-                aircraft_type = aircraft.get('aircraft_type', 'Unknown')
-                flights = aircraft.get('flights', 0)
-                operator_text += f"      • {aircraft_type}: {flights:,} flights\n"
-        
-        # Show top passenger aircraft  
-        if passenger_aircraft:
-            operator_text += f"   ✈️ **Passenger Fleet:**\n"
-            for aircraft in passenger_aircraft[:3]:  # Top 3 passenger types
-                aircraft_type = aircraft.get('aircraft_type', 'Unknown')
-                flights = aircraft.get('flights', 0)
-                operator_text += f"      • {aircraft_type}: {flights:,} flights\n"
-        
-        operator_text += "\n"
-        
-        # Check message length limit
-        if len(current_message + operator_text) > 3800:
-            messages.append(current_message)
-            current_message = f"🌍 **GEOGRAPHIC ANALYSIS** (continued)\n\n" + operator_text
-        else:
-            current_message += operator_text
+        message1 += f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
+        message1 += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n\n"
     
-    # Add the last message
-    if current_message.strip():
-        messages.append(current_message)
+    messages.append(message1)
+    
+    # Message 2: Detailed Fleet Breakdown for Top 5 operators
+    if len(operators) > 0:
+        message2 = f"🛩️ **DETAILED FLEET BREAKDOWN**\n"
+        message2 += f"*Top {min(5, len(operators))} operators with aircraft details*\n\n"
+        
+        for i, op in enumerate(operators[:5], 1):
+            operator_name = op.get('operator', 'Unknown')
+            operator_iata = op.get('operator_iata_code') or 'N/A'
+            total_flights = op.get('total_flights', 0)
+            
+            message2 += f"**{i}. {operator_name}** ({operator_iata}) - {total_flights:,} flights\n"
+            
+            # Show detailed fleet breakdown
+            fleet_breakdown = op.get('fleet_breakdown', {})
+            freighter_aircraft = fleet_breakdown.get('freighter_aircraft', [])
+            passenger_aircraft = fleet_breakdown.get('passenger_aircraft', [])
+            
+            # Show freighter aircraft
+            if freighter_aircraft:
+                message2 += f"   🚛 **Freighter Fleet:**\n"
+                for aircraft in freighter_aircraft[:5]:  # Top 5 freighter types
+                    aircraft_type = aircraft.get('aircraft_type', 'Unknown')
+                    flights = aircraft.get('flights', 0)
+                    message2 += f"      • {aircraft_type}: {flights:,} flights\n"
+            
+            # Show passenger aircraft  
+            if passenger_aircraft:
+                message2 += f"   ✈️ **Passenger Fleet:**\n"
+                for aircraft in passenger_aircraft[:5]:  # Top 5 passenger types
+                    aircraft_type = aircraft.get('aircraft_type', 'Unknown')
+                    flights = aircraft.get('flights', 0)
+                    message2 += f"      • {aircraft_type}: {flights:,} flights\n"
+            
+            message2 += "\n"
+            
+            # Check if message is getting too long
+            if len(message2) > 3500:
+                break
+        
+        messages.append(message2)
+    
+    # Message 3: Additional operators (6-10) if available
+    if len(operators) > 5:
+        message3 = f"📊 **ADDITIONAL OPERATORS**\n"
+        message3 += f"*Operators 6-{min(10, len(operators))} serving both locations*\n\n"
+        
+        for i, op in enumerate(operators[5:10], 6):  # Operators 6-10
+            operator_name = op.get('operator', 'Unknown')
+            operator_iata = op.get('operator_iata_code') or 'N/A'
+            operator_icao = op.get('operator_icao_code') or 'N/A'
+            total_flights = op.get('total_flights', 0)
+            freighter_percentage = op.get('freighter_percentage', 0)
+            passenger_percentage = op.get('passenger_percentage', 0)
+            
+            message3 += f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
+            message3 += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n\n"
+        
+        messages.append(message3)
     
     # Collect operator info for clickable buttons (top 10 operators)
     operator_buttons = []
