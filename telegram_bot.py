@@ -385,38 +385,16 @@ def format_geographic_operator_results(results: dict) -> dict:
     header += f"• {summary.get('freighter_flights', 0):,} freighter ({round(summary.get('freighter_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n"
     header += f"• {summary.get('passenger_flights', 0):,} passenger ({round(summary.get('passenger_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n\n"
     
-    header += f"🏆 **TOP OPERATORS:**\n\n"
-    
     messages = []
     
-    # Message 1: Summary + ALL operators with clickable names
-    message1 = header
-    message1 += f"📋 **ALL OPERATORS** ({len(operators)} total):\n\n"
+    # Message 1: Summary only
+    messages.append(header)
     
-    for i, op in enumerate(operators, 1):
-        operator_name = op.get('operator', 'Unknown')
-        operator_iata = op.get('operator_iata_code') or 'N/A'
-        total_flights = op.get('total_flights', 0)
-        freighter_percentage = op.get('freighter_percentage', 0)
-        passenger_percentage = op.get('passenger_percentage', 0)
-        
-        # For now, use regular operator names - clickable buttons will be at the end
-        message1 += f"{i}. **{operator_name}** ({operator_iata})\n"
-        message1 += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n\n"
-        
-        # Split into multiple messages if getting too long
-        if len(message1) > 3500:
-            messages.append(message1)
-            message1 = f"📋 **OPERATORS** (continued):\n\n"
-    
-    if message1.strip() and not message1.endswith("📋 **OPERATORS** (continued):\n\n"):
-        messages.append(message1)
-    
-    # Message 2: Top 10 Operators with Aircraft Details
+    # Message 2: ALL Operators with Fleet Details
     if len(operators) > 0:
-        message2 = f"🛩️ **TOP 10 OPERATORS - FLEET BREAKDOWN**\n\n"
+        message2 = f"🛩️ **ALL OPERATORS - FLEET BREAKDOWN**\n\n"
         
-        for i, op in enumerate(operators[:10], 1):
+        for i, op in enumerate(operators, 1):
             operator_name = op.get('operator', 'Unknown')
             operator_iata = op.get('operator_iata_code') or 'N/A'
             total_flights = op.get('total_flights', 0)
@@ -457,11 +435,14 @@ def format_geographic_operator_results(results: dict) -> dict:
             
             message2 += "\n"
             
-            # Check if message is getting too long
+            # Check if message is getting too long, split into multiple messages
             if len(message2) > 3500:
-                break
+                messages.append(message2)
+                message2 = f"🛩️ **OPERATORS - FLEET BREAKDOWN** (continued)\n\n"
         
-        messages.append(message2)
+        # Add the final message if it has content
+        if message2.strip() and not message2.endswith("🛩️ **OPERATORS - FLEET BREAKDOWN** (continued)\n\n"):
+            messages.append(message2)
     
     # Message 3: Airport Breakdown per Operator
     airport_breakdown = results.get('airport_breakdown_by_operator', [])
