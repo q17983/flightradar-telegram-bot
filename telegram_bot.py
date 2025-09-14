@@ -655,6 +655,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 • All functions show comprehensive results
 • Type /examples for more query examples
 
+🎯 *Function Selection:*
+• Use /selectfunction to choose which function to use
+• Helpful when queries could match multiple functions
+• Example: "PEK to SCL operators" could be Function 1 or 10
+
 🔧 *Advanced Functions:*
 Functions 2-7 are available but not actively promoted. Focus on the 4 core functions above for best results.
 """
@@ -806,12 +811,51 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 """
     await update.message.reply_text(functions_text, parse_mode='Markdown')
 
+async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show function selection menu."""
+    keyboard = [
+        [
+            InlineKeyboardButton("🏢 Operators by Destination", callback_data="select_func_1"),
+            InlineKeyboardButton("🔍 Operator Details", callback_data="select_func_8")
+        ],
+        [
+            InlineKeyboardButton("🗺️ Multi-Destination Operators", callback_data="select_func_9"),
+            InlineKeyboardButton("🌍 Geographic Operators", callback_data="select_func_10")
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data="cancel_selection")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🎯 **SELECT FUNCTION**\n\n"
+        "Choose which type of analysis you want:\n\n"
+        "🏢 **Operators by Destination** (Function 1)\n"
+        "   *Find operators flying to specific airports*\n"
+        "   Example: \"Who flies to LAX?\"\n\n"
+        "🔍 **Operator Details** (Function 8)\n"
+        "   *Get detailed operator information*\n"
+        "   Example: \"FedEx details\"\n\n"
+        "🗺️ **Multi-Destination Operators** (Function 9)\n"
+        "   *Find operators serving multiple airports*\n" 
+        "   Example: \"Operators to both JFK and LAX\"\n\n"
+        "🌍 **Geographic Operators** (Function 10)\n"
+        "   *Find operators between countries/continents*\n"
+        "   Example: \"PEK to SCL operators\"\n\n"
+        "👆 **Click a button above to continue**",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming text messages."""
     user_query = update.message.text
     user_name = update.message.from_user.first_name or "User"
     
     logger.info(f"Query from {user_name}: {user_query}")
+    
     
     # TEMPORARY: Direct test of Function 9
     if user_query.lower() == "test function 9":
@@ -838,15 +882,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
-        # Check if this is an operator search query (Function 8)
-        if is_operator_search_query(user_query):
-            search_term = extract_operator_from_query(user_query)
-            if search_term:
-                await handle_operator_search(update, context, search_term)
-                return
+        # Check if user has selected a specific function
+        selected_function = context.user_data.get('selected_function')
         
-        # Analyze query with OpenAI for other functions
-        analysis = await analyze_query_with_openai(user_query)
+        if selected_function:
+            # User has pre-selected a function, force its use
+            logger.info(f"🎯 Using pre-selected function: {selected_function}")
+            
+            if selected_function == 'get_operator_details':
+                # Handle as operator search
+                search_term = extract_operator_from_query(user_query)
+                if search_term:
+                    await handle_operator_search(update, context, search_term)
+                    # Clear the selection after use
+                    context.user_data.pop('selected_function', None)
+                    return
+            else:
+                # Create analysis with forced function
+                analysis = await analyze_query_with_openai(user_query)
+                if analysis:
+                    # Override the function name with user's selection
+                    analysis['function_name'] = selected_function
+                    logger.info(f"🔄 Overrode function to: {selected_function}")
+            
+            # Clear the selection after use
+            context.user_data.pop('selected_function', None)
+        else:
+            # Check if this is an operator search query (Function 8)
+            if is_operator_search_query(user_query):
+                search_term = extract_operator_from_query(user_query)
+                if search_term:
+                    await handle_operator_search(update, context, search_term)
+                    return
+            
+            # Analyze query with OpenAI for other functions
+            analysis = await analyze_query_with_openai(user_query)
         
         if not analysis:
             await update.message.reply_text(
@@ -1044,6 +1114,63 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code for new search:")
             await query.answer()
             
+        # Function Selection Handlers
+        elif callback_data.startswith("select_func_"):
+            func_id = callback_data.split("_")[-1]
+            
+            if func_id == "1":
+                await query.edit_message_text(
+                    "🏢 **Operators by Destination Selected**\n\n"
+                    "Enter your query for finding operators flying to a specific airport.\n\n"
+                    "**Examples:**\n"
+                    "• \"Who flies to LAX?\"\n"
+                    "• \"Operators to SCL\"\n"
+                    "• \"Airlines flying to TLV\"\n\n"
+                    "💬 **Type your query now:**"
+                )
+                context.user_data['selected_function'] = 'get_operators_by_destination'
+                
+            elif func_id == "8":
+                await query.edit_message_text(
+                    "🔍 **Operator Details Selected**\n\n"
+                    "Enter operator name, IATA, or ICAO code for detailed analysis.\n\n"
+                    "**Examples:**\n"
+                    "• \"FedEx details\"\n"
+                    "• \"Operator details UPS\"\n"
+                    "• \"Show operator AA\"\n\n"
+                    "💬 **Type your query now:**"
+                )
+                context.user_data['selected_function'] = 'get_operator_details'
+                
+            elif func_id == "9":
+                await query.edit_message_text(
+                    "🗺️ **Multi-Destination Operators Selected**\n\n"
+                    "Enter your query for finding operators serving multiple airports.\n\n"
+                    "**Examples:**\n"
+                    "• \"Operators to both JFK and LAX\"\n"
+                    "• \"Which airlines fly to both HKG and NRT?\"\n\n"
+                    "💬 **Type your query now:**"
+                )
+                context.user_data['selected_function'] = 'get_operators_by_multi_destinations'
+                
+            elif func_id == "10":
+                await query.edit_message_text(
+                    "🌍 **Geographic Operators Selected**\n\n"
+                    "Enter your query for finding operators between countries, continents, or airports.\n\n"
+                    "**Examples:**\n"
+                    "• \"PEK to SCL operators\" (airport to airport)\n"
+                    "• \"China to Chile operators\" (country to country)\n"
+                    "• \"Korea to Taiwan operators\"\n\n"
+                    "💬 **Type your query now:**"
+                )
+                context.user_data['selected_function'] = 'get_operators_by_geographic_locations'
+            
+            await query.answer()
+            
+        elif callback_data == "cancel_selection":
+            await query.edit_message_text("❌ Function selection cancelled. You can type any query or use /selectfunction again.")
+            await query.answer()
+            
     except Exception as e:
         logger.error(f"Error handling callback query: {e}")
         await query.answer("❌ Error occurred")
@@ -1197,6 +1324,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("examples", examples_command))
     application.add_handler(CommandHandler("functions", functions_command))
+    application.add_handler(CommandHandler("selectfunction", selectfunction_command))
     application.add_handler(CallbackQueryHandler(handle_callback_query))  # Handle button clicks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
