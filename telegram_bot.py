@@ -924,18 +924,19 @@ async def handle_operator_search(update: Update, context: ContextTypes.DEFAULT_T
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle button clicks from inline keyboards."""
     query = update.callback_query
-    await query.answer()  # Acknowledge the button click
     
     try:
         callback_data = query.data
         
         if callback_data.startswith("select_operator_"):
             # Handle both regular operator selection and geographic operator selection
-            if callback_data.startswith("select_operator_geo_"):
-                # Geographic operator selection (Function 10)
+            is_geographic_selection = callback_data.startswith("select_operator_geo_")
+            
+            if is_geographic_selection:
+                # Geographic operator selection (Function 10) - preserve original results
                 operator_name = callback_data.replace("select_operator_geo_", "")
             else:
-                # Regular operator selection (Function 8 search)
+                # Regular operator selection (Function 8 search) - replace message
                 parts = callback_data.split("_", 3)
                 if len(parts) >= 4:
                     selection_id = parts[2]
@@ -949,24 +950,39 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # Format and display results
             response_text = format_operator_details(results)
             
-            # Edit the message to show full details
-            await query.edit_message_text(
-                text=response_text,
-                parse_mode='Markdown',
-                reply_markup=create_details_keyboard()
-            )
+            if is_geographic_selection:
+                # For Function 10: Send new message to preserve original results
+                await query.message.reply_text(
+                    text=response_text,
+                    parse_mode='Markdown',
+                    reply_markup=create_details_keyboard()
+                )
+                # Acknowledge the button click
+                await query.answer("✅ Operator details loaded!")
+            else:
+                # For Function 8: Edit the message to show full details
+                await query.edit_message_text(
+                    text=response_text,
+                    parse_mode='Markdown',
+                    reply_markup=create_details_keyboard()
+                )
+                await query.answer()
             
         elif callback_data == "search_again":
             await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code to search:")
+            await query.answer()
             
         elif callback_data == "cancel":
             await query.edit_message_text("❌ Search cancelled.")
+            await query.answer()
             
         elif callback_data == "new_search":
             await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code for new search:")
+            await query.answer()
             
     except Exception as e:
         logger.error(f"Error handling callback query: {e}")
+        await query.answer("❌ Error occurred")
         await query.edit_message_text("❌ Error processing selection. Please try again.")
 
 def get_operator_emoji(operator: dict) -> str:
