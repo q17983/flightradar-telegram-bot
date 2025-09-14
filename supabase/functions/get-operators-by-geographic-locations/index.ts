@@ -348,62 +348,56 @@ serve(async (req: Request) => {
 
       console.log("✅ Found", qualifiedOperators.length, "operators serving both geographic locations")
 
-      // 8. Calculate airport breakdown per operator for each location
-      const operatorAirportBreakdown = new Map()
-      
-      // Build airport breakdown per operator
-      queryResult.rows.forEach(flight => {
-        const operatorKey = `${flight.operator_iata_code}|${flight.operator}`
+      // 8. Calculate airport breakdown for qualified operators only
+      const airportBreakdownByOperator = qualifiedOperators.map(qualifiedOp => {
+        const operatorKey = `${qualifiedOp.operator_iata_code}|${qualifiedOp.operator}`
         
-        if (!operatorAirportBreakdown.has(operatorKey)) {
-          operatorAirportBreakdown.set(operatorKey, {
-            operator: flight.operator,
-            operator_iata_code: flight.operator_iata_code,
-            first_location_airports: new Map(),
-            second_location_airports: new Map()
-          })
-        }
+        const firstLocationAirports = new Map()
+        const secondLocationAirports = new Map()
         
-        const operatorData = operatorAirportBreakdown.get(operatorKey)
-        const flightCount = Number(flight.frequency)
-        
-        // Track airports by location match
-        if (flight.location_match === 'first_location') {
-          const airportCode = flight.destination_code
-          if (!operatorData.first_location_airports.has(airportCode)) {
-            operatorData.first_location_airports.set(airportCode, {
-              iata_code: airportCode,
-              airport_name: flight.destination_name,
-              flights: 0
-            })
+        // Find all flights for this qualified operator
+        queryResult.rows.forEach(flight => {
+          const flightOperatorKey = `${flight.operator_iata_code}|${flight.operator}`
+          
+          if (flightOperatorKey === operatorKey) {
+            const flightCount = Number(flight.frequency)
+            
+            // Track airports by location match
+            if (flight.location_match === 'first_location') {
+              const airportCode = flight.destination_code
+              if (!firstLocationAirports.has(airportCode)) {
+                firstLocationAirports.set(airportCode, {
+                  iata_code: airportCode,
+                  airport_name: flight.destination_name,
+                  flights: 0
+                })
+              }
+              firstLocationAirports.get(airportCode).flights += flightCount
+            } else if (flight.location_match === 'second_location') {
+              const airportCode = flight.destination_code
+              if (!secondLocationAirports.has(airportCode)) {
+                secondLocationAirports.set(airportCode, {
+                  iata_code: airportCode,
+                  airport_name: flight.destination_name,
+                  flights: 0
+                })
+              }
+              secondLocationAirports.get(airportCode).flights += flightCount
+            }
           }
-          operatorData.first_location_airports.get(airportCode).flights += flightCount
-        } else if (flight.location_match === 'second_location') {
-          const airportCode = flight.destination_code
-          if (!operatorData.second_location_airports.has(airportCode)) {
-            operatorData.second_location_airports.set(airportCode, {
-              iata_code: airportCode,
-              airport_name: flight.destination_name,
-              flights: 0
-            })
-          }
-          operatorData.second_location_airports.get(airportCode).flights += flightCount
-        }
-      })
-      
-      // Convert to arrays and sort airports by flights for each operator
-      const airportBreakdownByOperator = Array.from(operatorAirportBreakdown.values())
-        .map(operatorData => ({
-          operator: operatorData.operator,
-          operator_iata_code: operatorData.operator_iata_code,
-          first_location_airports: Array.from(operatorData.first_location_airports.values())
+        })
+        
+        return {
+          operator: qualifiedOp.operator,
+          operator_iata_code: qualifiedOp.operator_iata_code,
+          first_location_airports: Array.from(firstLocationAirports.values())
             .sort((a, b) => b.flights - a.flights)
             .slice(0, 10), // Top 10 airports per operator
-          second_location_airports: Array.from(operatorData.second_location_airports.values())
+          second_location_airports: Array.from(secondLocationAirports.values())
             .sort((a, b) => b.flights - a.flights)
             .slice(0, 10) // Top 10 airports per operator
-        }))
-        .filter(op => op.first_location_airports.length > 0 || op.second_location_airports.length > 0)
+        }
+      }).filter(op => op.first_location_airports.length > 0 || op.second_location_airports.length > 0)
 
       const result = {
         message: `Found ${qualifiedOperators.length} operators serving both geographic locations`,
