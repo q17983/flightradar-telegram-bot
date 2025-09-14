@@ -113,12 +113,26 @@ async function searchOperators(connection: any, searchQuery: string) {
         COUNT(*) as aircraft_count,
         -- Calculate freighter percentage
         ROUND(
-            (COUNT(CASE WHEN 
+            (COUNT(CASE WHEN (
+                -- Explicit freighter terms
                 UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-                OR UPPER(a.aircraft_details) LIKE '%-F%'
                 OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-                OR UPPER(a.aircraft_details) LIKE '%BCF%'
-                OR UPPER(a.aircraft_details) LIKE '%SF%'
+                OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
+                OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
+                OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
+                OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+                
+                -- Broad F pattern for comprehensive coverage
+                OR UPPER(a.aircraft_details) LIKE '%F%'
+            )
+            -- Exclude military and passenger patterns
+            AND NOT (
+                UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
+                OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
+                OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
+                OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
+                OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
+            )
             THEN 1 END) * 100.0 / COUNT(*)), 0
         ) as freighter_percentage,
         -- Determine match type for ranking
@@ -198,11 +212,26 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
         a.aircraft_details,
         a.registration,
         CASE 
-            WHEN UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-              OR UPPER(a.aircraft_details) LIKE '%-F%'
+            WHEN (
+              -- Explicit freighter terms
+              UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
               OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-              OR UPPER(a.aircraft_details) LIKE '%BCF%'
-              OR UPPER(a.aircraft_details) LIKE '%SF%'
+              OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
+              OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
+              OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
+              OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+              
+              -- Broad F pattern for comprehensive coverage
+              OR UPPER(a.aircraft_details) LIKE '%F%'
+            )
+            -- Exclude military and passenger patterns
+            AND NOT (
+              UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
+              OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
+              OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
+              OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
+              OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
+            )
             THEN 'Freighter'
             ELSE 'Passenger'
         END as aircraft_category

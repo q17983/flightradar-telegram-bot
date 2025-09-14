@@ -61,11 +61,26 @@ serve(async (req: Request) => {
             a.aircraft_details,
             COUNT(m.id) as frequency,
             CASE 
-                WHEN UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-                  OR UPPER(a.aircraft_details) LIKE '%-F%'
+                WHEN (
+                  -- Explicit freighter terms
+                  UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
                   OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-                  OR UPPER(a.aircraft_details) LIKE '%BCF%'
-                  OR UPPER(a.aircraft_details) LIKE '%SF%'
+                  OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
+                  OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
+                  OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
+                  OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+                  
+                  -- Broad F pattern for comprehensive coverage
+                  OR UPPER(a.aircraft_details) LIKE '%F%'
+                )
+                -- Exclude military and passenger patterns
+                AND NOT (
+                  UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
+                  OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
+                  OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
+                  OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
+                  OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
+                )
                 THEN 'Freighter'
                 ELSE 'Passenger'
             END as aircraft_category
