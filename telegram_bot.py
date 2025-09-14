@@ -127,6 +127,9 @@ Rules:
 - For "[airline] regional origins" → get_operator_origins_by_region
 - For "multi-leg" or "complex routing" → calculate_multi_leg_route_metrics
 - For "operators to both X and Y", "which operators fly to both", "carriers serving multiple", "multiple destinations" → get_operators_by_multi_destinations (use destination_codes as array)
+- For geographic queries like "China to SCL", "JFK to Asia", "operators from Europe to Japan", "country to airport", "continent to country" → get_operators_by_geographic_locations
+  * Detect location types: airports (3-letter codes), countries (full names), continents (Asia, Europe, North America, South America, Africa, Oceania)
+  * Parameters: first_location_type, first_location_value, second_location_type, second_location_value
 
 Return JSON:
 {{
@@ -552,6 +555,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 • "Complex routing analysis"
 *Advanced routing calculations for multiple stops*
 
+🌍 *8. Geographic Operator Analysis*
+• "China to SCL operators"
+• "JFK to Asia carriers"
+• "Europe to Japan flights"
+• "Operators from North America to Thailand"
+*Find operators serving airports, countries, or continents*
+
 💡 *Usage Tips:*
 • Use 3-letter IATA codes (LAX, JFK, LHR, DXB)
 • Data covers Apr 2024 - May 2025 (408 days)
@@ -619,6 +629,14 @@ async def examples_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 • "Show operator Lufthansa"
 • "Airline info EK"
 *→ Returns fleet breakdown + route analysis with clickable buttons*
+
+🌍 *Geographic Analysis (NEW!):*
+• "China to SCL operators"
+• "JFK to Asia carriers"
+• "Europe to Japan flights"
+• "North America to Thailand operators"
+• "Operators from Germany to Singapore"
+*→ Returns operators serving countries/continents with aircraft details*
 
 💼 *Business Scenarios:*
 • "Cargo options to Mumbai"
