@@ -928,8 +928,9 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Pin the message to the top
     await update.message.reply_text(
-        "🎯 **SELECT FUNCTION**\n\n"
+        "📌 **FUNCTION SELECTION MENU** (Pinned)\n\n"
         "Choose which type of analysis you want:\n\n"
         "🏢 **Operators by Destination** (Function 1)\n"
         "   *Find operators flying to specific airports*\n"
@@ -943,7 +944,8 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         "🌍 **Geographic Operators** (Function 10)\n"
         "   *Find operators between countries/continents*\n"
         "   Example: \"PEK to SCL operators\"\n\n"
-        "👆 **Click a button above to continue**",
+        "👆 **Click a button above to continue**\n"
+        "💡 **Your selection will stay active until you change it**",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1010,8 +1012,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     analysis['function_name'] = selected_function
                     logger.info(f"🔄 Overrode function to: {selected_function}")
             
-            # Clear the selection after use
-            context.user_data.pop('selected_function', None)
+            # Keep the selection persistent - don't clear it
+            # User can change it by using /selectfunction again
         else:
             # Check if this is an operator search query (Function 8)
             if is_operator_search_query(user_query):
@@ -1225,48 +1227,52 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             
             if func_id == "1":
                 await query.edit_message_text(
-                    "🏢 **Operators by Destination Selected**\n\n"
+                    "🏢 **Operators by Destination Selected** ✅\n\n"
                     "Enter your query for finding operators flying to a specific airport.\n\n"
                     "**Examples:**\n"
                     "• \"Who flies to LAX?\"\n"
                     "• \"Operators to SCL\"\n"
                     "• \"Airlines flying to TLV\"\n\n"
-                    "💬 **Type your query now:**"
+                    "💬 **Type your query now:**\n"
+                    "💡 **This selection will stay active until you change it**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_destination'
                 
             elif func_id == "8":
                 await query.edit_message_text(
-                    "🔍 **Operator Details Selected**\n\n"
+                    "🔍 **Operator Details Selected** ✅\n\n"
                     "Enter operator name, IATA, or ICAO code for detailed analysis.\n\n"
                     "**Examples:**\n"
                     "• \"FedEx details\"\n"
                     "• \"Operator details UPS\"\n"
                     "• \"Show operator AA\"\n\n"
-                    "💬 **Type your query now:**"
+                    "💬 **Type your query now:**\n"
+                    "💡 **This selection will stay active until you change it**"
                 )
                 context.user_data['selected_function'] = 'get_operator_details'
                 
             elif func_id == "9":
                 await query.edit_message_text(
-                    "🗺️ **Multi-Destination Operators Selected**\n\n"
+                    "🗺️ **Multi-Destination Operators Selected** ✅\n\n"
                     "Enter your query for finding operators serving multiple airports.\n\n"
                     "**Examples:**\n"
                     "• \"Operators to both JFK and LAX\"\n"
                     "• \"Which airlines fly to both HKG and NRT?\"\n\n"
-                    "💬 **Type your query now:**"
+                    "💬 **Type your query now:**\n"
+                    "💡 **This selection will stay active until you change it**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_multi_destinations'
                 
             elif func_id == "10":
                 await query.edit_message_text(
-                    "🌍 **Geographic Operators Selected**\n\n"
+                    "🌍 **Geographic Operators Selected** ✅\n\n"
                     "Enter your query for finding operators between countries, continents, or airports.\n\n"
                     "**Examples:**\n"
                     "• \"PEK to SCL operators\" (airport to airport)\n"
                     "• \"China to Chile operators\" (country to country)\n"
                     "• \"Korea to Taiwan operators\"\n\n"
-                    "💬 **Type your query now:**"
+                    "💬 **Type your query now:**\n"
+                    "💡 **This selection will stay active until you change it**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_geographic_locations'
             

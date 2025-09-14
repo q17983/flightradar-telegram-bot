@@ -174,10 +174,12 @@ serve(async (req: Request) => {
             AND m.scheduled_departure >= $1
             AND m.scheduled_departure <= $2
             AND a.operator IS NOT NULL
+            AND a.operator != ''
           GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, 
                    a.type, a.aircraft_details, a.registration,
                    m.destination_code, ag.airport_name, ag.country_name, ag.continent,
                    aircraft_category, location_match
+          HAVING COUNT(*) >= 1
         )
         SELECT 
           operator,
@@ -194,7 +196,8 @@ serve(async (req: Request) => {
           aircraft_category,
           location_match
         FROM operator_flights
-        ORDER BY operator, aircraft_category, aircraft_type, frequency DESC;
+        ORDER BY operator, aircraft_category, aircraft_type, frequency DESC
+        LIMIT 10000;
       `
       
       // 7. Execute the query
