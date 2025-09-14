@@ -192,6 +192,96 @@ Return JSON:
         logger.error(f"Error with OpenAI: {e}")
         return None
 
+async def analyze_geographic_query_with_openai(query: str) -> dict:
+    """Analyze user query as geographic query (Function 10) using OpenAI."""
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a flight data analysis assistant. Analyze user queries as GEOGRAPHIC QUERIES for Function 10.
+
+FUNCTION: get_operators_by_geographic_locations
+PURPOSE: Find operators serving between countries/continents/airports
+
+IMPORTANT RULES:
+- ALWAYS use the full database range: start_time: "2024-04-01", end_time: "2025-05-31"
+- Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL, TLV
+- Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
+
+COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
+- Korea/Korean → "South Korea" (NOT Japan/JPN, NOT "Korea")
+- Taiwan/Taiwanese → "Taiwan" 
+- China/Chinese → "China"
+- Japan/Japanese → "Japan"  
+- Thailand/Thai → "Thailand"
+- Germany/German → "Germany"
+
+CONTINENT CODES (Use these exact codes):
+- Asia → "AS"
+- North America → "NA" 
+- Europe → "EU"
+- South America → "SA"
+- Africa → "AF"
+- Oceania → "OC"
+- Antarctica → "AN"
+
+GEOGRAPHIC QUERY PATTERNS:
+- "China to TLV" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "TLV"
+- "Korea to Japan operators" → first_location_type: "country", first_location_value: "South Korea", second_location_type: "country", second_location_value: "Japan"
+- "Thailand to North America operators" → first_location_type: "country", first_location_value: "Thailand", second_location_type: "continent", second_location_value: "NA"
+- "JFK to Asia carriers" → first_location_type: "airport", first_location_value: "JFK", second_location_type: "continent", second_location_value: "AS"
+
+LOCATION TYPE DETECTION:
+- 3-letter codes (LAX, JFK, TLV) → "airport"
+- Country names (China, Japan, Thailand) → "country"  
+- Continent names (Asia, North America, Europe) → "continent"
+
+Return JSON:
+{{
+    "function_name": "get_operators_by_geographic_locations",
+    "parameters": {{
+        "first_location_type": "airport|country|continent",
+        "first_location_value": "exact_value",
+        "second_location_type": "airport|country|continent", 
+        "second_location_value": "exact_value",
+        "start_time": "2024-04-01",
+        "end_time": "2025-05-31"
+    }},
+    "reasoning": "Brief explanation of geographic analysis"
+}}"""
+                },
+                {
+                    "role": "user", 
+                    "content": query
+                }
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        content = response.choices[0].message.content.strip()
+        logger.info(f"OpenAI geographic analysis response: {content}")
+        
+        # Handle code blocks
+        if "```json" in content:
+            start = content.find("```json") + 7
+            end = content.find("```", start)
+            content = content[start:end].strip()
+        elif "```" in content:
+            start = content.find("```") + 3
+            end = content.rfind("```")
+            content = content[start:end].strip()
+        
+        # Parse JSON response
+        analysis = json.loads(content)
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"OpenAI geographic analysis failed: {e}")
+        return None
+
 async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     """Call Supabase Edge Function."""
     
@@ -908,7 +998,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     return
             else:
                 # Create analysis with forced function
-                analysis = await analyze_query_with_openai(user_query)
+                if selected_function == 'get_operators_by_geographic_locations':
+                    # For Function 10, force geographic analysis
+                    analysis = await analyze_geographic_query_with_openai(user_query)
+                else:
+                    # For other functions, use normal analysis
+                    analysis = await analyze_query_with_openai(user_query)
+                
                 if analysis:
                     # Override the function name with user's selection
                     analysis['function_name'] = selected_function
