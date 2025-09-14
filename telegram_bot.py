@@ -416,10 +416,10 @@ def format_geographic_operator_results(results: dict) -> dict:
                     
                     message2 += f"      • {aircraft_type}: {flights:,} flights\n"
                     
-                    # Show top airports for this aircraft type
+                    # Show ALL airports for this aircraft type
                     if destinations:
                         airport_list = []
-                        for dest in destinations[:5]:  # Top 5 airports per aircraft type
+                        for dest in destinations:  # ALL airports, not just top 5
                             airport_code = dest.get('code', '???')
                             airport_flights = dest.get('flights', 0)
                             airport_list.append(f"{airport_code}: {airport_flights}")

@@ -311,7 +311,8 @@ serve(async (req: Request) => {
                   flights: dest.flights
                 }))
                 .sort((a, b) => b.flights - a.flights)
-                .slice(0, 5) // Top 5 destinations per aircraft type
+                // Show ALL destinations for freighter aircraft, top 5 for passenger
+                .slice(0, aircraft.aircraft_category === 'Freighter' ? undefined : 5)
             }
             
             if (aircraft.aircraft_category === 'Freighter') {

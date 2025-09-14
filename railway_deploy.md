@@ -25,7 +25,7 @@ In Railway dashboard → Variables tab, add:
 
 ```
 TELEGRAM_BOT_TOKEN=8127356642:AAFkiXL5uGmvNa9-sfWyLaHpAy8HD_TGSG4
-GEMINI_API_KEY=AIzaSyD-Qv5W4P5phqzZfo8lJk9uOyWBvyaNasE
+OPENAI_API_KEY=[your-openai-api-key]
 SUPABASE_URL=https://rndhquvvnxhmwtllslqn.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuZGhxdXZ2bnhobXd0bGxzbHFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI1MjU2NzgsImV4cCI6MjAyODEwMTY3OH0.FQOq4h7yYHf5V9VvgvZNH_REL-EC0Q4hjxs0
 DB_HOST=aws-0-us-west-1.pooler.supabase.com
@@ -35,7 +35,9 @@ DB_USER=postgres.rndhquvvnxhmwtllslqn
 DB_PASSWORD=[your-db-password]
 ```
 
-⚠️ **Note**: Replace `[your-db-password]` with your actual Supabase database password
+⚠️ **Critical**: Replace these values with your actual credentials:
+- `[your-openai-api-key]` - Get from https://platform.openai.com/api-keys
+- `[your-db-password]` - Your actual Supabase database password
 
 ### **Step 4: Verify Deployment** 
 1. Check Railway logs for: `✅ Bot is ready! Send /start to begin.`
