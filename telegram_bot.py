@@ -95,6 +95,11 @@ FUNCTION_MAP = {
         "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-multi-destinations",
         "params": ["destination_codes", "start_time", "end_time"],
         "description": "Find operators that serve multiple specified destinations"
+    },
+    "get_operators_by_geographic_locations": {
+        "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-geographic-locations",
+        "params": ["first_location_type", "first_location_value", "second_location_type", "second_location_value", "start_time", "end_time"],
+        "description": "Find operators serving multiple geographic locations (airports, countries, continents)"
     }
 }
 
@@ -315,6 +320,92 @@ def format_multi_destination_results(results: dict) -> list:
     
     return messages
 
+def format_geographic_operator_results(results: dict) -> list:
+    """Format Function 10 geographic operator results with detailed aircraft breakdown."""
+    
+    if "error" in results:
+        return [f"❌ Error: {results['error']}"]
+    
+    operators = results.get("operators", [])
+    search_criteria = results.get("search_criteria", {})
+    summary = results.get("summary", {})
+    
+    if not operators:
+        first_loc = search_criteria.get("first_location", {})
+        second_loc = search_criteria.get("second_location", {})
+        return [f"📭 No operators found serving both {first_loc.get('value')} ({first_loc.get('type')}) and {second_loc.get('value')} ({second_loc.get('type')})."]
+    
+    first_loc = search_criteria.get("first_location", {})
+    second_loc = search_criteria.get("second_location", {})
+    
+    # Create header message with search summary
+    header = f"🌍 **GEOGRAPHIC OPERATOR ANALYSIS**\n"
+    header += f"📍 **{first_loc.get('value')}** ({first_loc.get('type')}) ↔ **{second_loc.get('value')}** ({second_loc.get('type')})\n"
+    header += f"📅 *Period: {results.get('time_range', {}).get('start_time')} to {results.get('time_range', {}).get('end_time')}*\n\n"
+    
+    header += f"📊 **SUMMARY:**\n"
+    header += f"• {summary.get('total_operators', 0)} operators found\n"
+    header += f"• {summary.get('total_flights', 0):,} total flights\n"
+    header += f"• {summary.get('freighter_flights', 0):,} freighter ({round(summary.get('freighter_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n"
+    header += f"• {summary.get('passenger_flights', 0):,} passenger ({round(summary.get('passenger_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n\n"
+    
+    header += f"🏆 **TOP OPERATORS:**\n\n"
+    
+    messages = []
+    current_message = header
+    
+    # Show top operators with fleet details
+    for i, op in enumerate(operators[:10], 1):  # Show top 10 operators
+        operator_name = op.get('operator', 'Unknown')
+        operator_iata = op.get('operator_iata_code') or 'N/A'
+        operator_icao = op.get('operator_icao_code') or 'N/A'
+        total_flights = op.get('total_flights', 0)
+        freighter_percentage = op.get('freighter_percentage', 0)
+        passenger_percentage = op.get('passenger_percentage', 0)
+        
+        operator_text = f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
+        operator_text += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n"
+        
+        # Show fleet breakdown
+        fleet_breakdown = op.get('fleet_breakdown', {})
+        freighter_aircraft = fleet_breakdown.get('freighter_aircraft', [])
+        passenger_aircraft = fleet_breakdown.get('passenger_aircraft', [])
+        
+        # Show top freighter aircraft
+        if freighter_aircraft:
+            operator_text += f"   🚛 **Freighter Fleet:**\n"
+            for aircraft in freighter_aircraft[:3]:  # Top 3 freighter types
+                aircraft_type = aircraft.get('aircraft_type', 'Unknown')
+                flights = aircraft.get('flights', 0)
+                operator_text += f"      • {aircraft_type}: {flights:,} flights\n"
+        
+        # Show top passenger aircraft  
+        if passenger_aircraft:
+            operator_text += f"   ✈️ **Passenger Fleet:**\n"
+            for aircraft in passenger_aircraft[:3]:  # Top 3 passenger types
+                aircraft_type = aircraft.get('aircraft_type', 'Unknown')
+                flights = aircraft.get('flights', 0)
+                operator_text += f"      • {aircraft_type}: {flights:,} flights\n"
+        
+        operator_text += "\n"
+        
+        # Check message length limit
+        if len(current_message + operator_text) > 3800:
+            messages.append(current_message)
+            current_message = f"🌍 **GEOGRAPHIC ANALYSIS** (continued)\n\n" + operator_text
+        else:
+            current_message += operator_text
+    
+    # Add the last message
+    if current_message.strip():
+        messages.append(current_message)
+    
+    # Add footer to last message
+    if messages:
+        messages[-1] += f"\n💡 *Reply with operator number (1-{min(10, len(operators))}) for detailed fleet breakdown*"
+    
+    return messages
+
 def format_results_for_telegram(results: dict, function_name: str) -> str:
     """Format results for Telegram message."""
     
@@ -328,6 +419,10 @@ def format_results_for_telegram(results: dict, function_name: str) -> str:
     # Handle Function 9 format (multi-destination operators) - returns list for splitting
     if function_name == "get_operators_by_multi_destinations":
         return format_multi_destination_results(results)
+    
+    # Handle Function 10 format (geographic operators) - returns list for splitting
+    if function_name == "get_operators_by_geographic_locations":
+        return format_geographic_operator_results(results)
     
     if "results" not in results or not results["results"]:
         return "📭 No results found for your query."
