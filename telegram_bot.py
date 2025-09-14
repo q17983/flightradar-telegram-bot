@@ -130,7 +130,15 @@ COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
 - Japan/Japanese → "Japan"  
 - Thailand/Thai → "Thailand"
 - Germany/German → "Germany"
-- Continents: Asia, Europe, North America, South America, Africa, Oceania
+
+CONTINENT CODES (Use these exact codes):
+- Asia → "AS"
+- North America → "NA" 
+- Europe → "EU"
+- South America → "SA"
+- Africa → "AF"
+- Oceania → "OC"
+- Antarctica → "AN"
 
 FUNCTION SELECTION LOGIC:
 1. "who flies to [AIRPORT]" → get_operators_by_destination
@@ -145,6 +153,7 @@ FUNCTION SELECTION LOGIC:
 4. "[LOCATION] to [LOCATION] operators" or geographic queries → get_operators_by_geographic_locations
    Example: "Korea to Japan operators" → first_location_type: "country", first_location_value: "South Korea", second_location_type: "country", second_location_value: "Japan"
    Example: "China to SCL operators" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "SCL"
+   Example: "Thailand to North America operators" → first_location_type: "country", first_location_value: "Thailand", second_location_type: "continent", second_location_value: "NA"
 
 Return JSON:
 {{
