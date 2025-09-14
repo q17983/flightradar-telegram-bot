@@ -346,6 +346,27 @@ serve(async (req: Request) => {
         })
         .sort((a, b) => b.total_flights - a.total_flights)
 
+      // Debug: Log airport counts for each location
+      const firstLocationAirportCount = await connection.queryObject(`
+        SELECT COUNT(*) as count FROM airports_geography ag 
+        WHERE ${buildLocationCondition(first_location_type, first_location_value, 'ag')}
+      `)
+      const secondLocationAirportCount = await connection.queryObject(`
+        SELECT COUNT(*) as count FROM airports_geography ag 
+        WHERE ${buildLocationCondition(second_location_type, second_location_value, 'ag')}
+      `)
+      
+      console.log(`📍 ${first_location_value} (${first_location_type}): ${firstLocationAirportCount.rows[0]?.count || 0} airports`)
+      console.log(`📍 ${second_location_value} (${second_location_type}): ${secondLocationAirportCount.rows[0]?.count || 0} airports`)
+      
+      // Debug: Count operators serving each location individually
+      const operatorsServingFirst = Array.from(operatorMap.values()).filter(op => op.first_location_flights > 0).length
+      const operatorsServingSecond = Array.from(operatorMap.values()).filter(op => op.second_location_flights > 0).length
+      const operatorsServingBoth = Array.from(operatorMap.values()).filter(op => op.first_location_flights > 0 && op.second_location_flights > 0).length
+      
+      console.log(`🛩️ Operators serving ${first_location_value}: ${operatorsServingFirst}`)
+      console.log(`🛩️ Operators serving ${second_location_value}: ${operatorsServingSecond}`)
+      console.log(`🛩️ Operators serving BOTH: ${operatorsServingBoth}`)
       console.log("✅ Found", qualifiedOperators.length, "operators serving both geographic locations")
 
       // 8. Calculate airport breakdown for qualified operators only

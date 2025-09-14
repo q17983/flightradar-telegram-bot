@@ -125,7 +125,8 @@ CRITICAL RULES:
 - Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
 
 COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
-- Korea/Korean → "Korea" (NOT Japan/JPN)
+- Korea/Korean → "South Korea" (NOT Japan/JPN, NOT "Korea")
+- Taiwan/Taiwanese → "Taiwan" 
 - China/Chinese → "China"
 - Japan/Japanese → "Japan"  
 - Thailand/Thai → "Thailand"
@@ -143,7 +144,7 @@ FUNCTION SELECTION LOGIC:
    Example: "operators to both JFK and LAX" → destination_codes: ["JFK", "LAX"]
 
 4. "[LOCATION] to [LOCATION] operators" or geographic queries → get_operators_by_geographic_locations
-   Example: "Korea to Japan operators" → first_location_type: "country", first_location_value: "Korea", second_location_type: "country", second_location_value: "Japan"
+   Example: "Korea to Japan operators" → first_location_type: "country", first_location_value: "South Korea", second_location_type: "country", second_location_value: "Japan"
    Example: "China to SCL operators" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "SCL"
 
 Return JSON:
