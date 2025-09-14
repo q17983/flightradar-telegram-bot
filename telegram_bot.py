@@ -409,8 +409,13 @@ def format_geographic_operator_results(results: dict) -> list:
     
     return messages
 
-def format_results_for_telegram(results: dict, function_name: str) -> str:
-    """Format results for Telegram message."""
+def format_results_for_telegram(results: dict, function_name: str):
+    """Format results for Telegram message.
+    
+    Returns:
+        str: For most functions (single message)
+        list: For Functions 9 & 10 (multiple messages)
+    """
     
     if "error" in results:
         return f"❌ Error: {results['error']}"
@@ -780,8 +785,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Format and send results
         response_text = format_results_for_telegram(results, analysis["function_name"])
         
-        # Handle Function 9 which returns list of messages for ALL results
-        if analysis["function_name"] == "get_operators_by_multi_destinations" and isinstance(response_text, list):
+        # Handle Functions 9 & 10 which return list of messages for ALL results
+        if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"] and isinstance(response_text, list):
             # Send all messages in sequence
             for i, message in enumerate(response_text):
                 if i > 0:
