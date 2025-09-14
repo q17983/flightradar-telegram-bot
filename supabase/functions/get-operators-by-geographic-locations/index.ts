@@ -348,6 +348,69 @@ serve(async (req: Request) => {
 
       console.log("✅ Found", qualifiedOperators.length, "operators serving both geographic locations")
 
+      // 8. Calculate airport breakdown for each location
+      const firstLocationAirports = new Map()
+      const secondLocationAirports = new Map()
+      
+      // Aggregate flights by airport for each location
+      for (const row of rows) {
+        const isFirstLocation = row.serves_first_location
+        const isSecondLocation = row.serves_second_location
+        
+        if (isFirstLocation) {
+          const airportKey = `${row.destination_code}|${row.destination_name}`
+          if (!firstLocationAirports.has(airportKey)) {
+            firstLocationAirports.set(airportKey, {
+              iata_code: row.destination_code,
+              airport_name: row.destination_name,
+              country: row.dest_country,
+              continent: row.dest_continent,
+              total_flights: 0,
+              operators: new Set()
+            })
+          }
+          const airport = firstLocationAirports.get(airportKey)
+          airport.total_flights += row.frequency
+          airport.operators.add(row.operator)
+        }
+        
+        if (isSecondLocation) {
+          const airportKey = `${row.destination_code}|${row.destination_name}`
+          if (!secondLocationAirports.has(airportKey)) {
+            secondLocationAirports.set(airportKey, {
+              iata_code: row.destination_code,
+              airport_name: row.destination_name,
+              country: row.dest_country,
+              continent: row.dest_continent,
+              total_flights: 0,
+              operators: new Set()
+            })
+          }
+          const airport = secondLocationAirports.get(airportKey)
+          airport.total_flights += row.frequency
+          airport.operators.add(row.operator)
+        }
+      }
+      
+      // Convert to arrays and sort by flights
+      const firstLocationAirportList = Array.from(firstLocationAirports.values())
+        .map(airport => ({
+          ...airport,
+          operator_count: airport.operators.size,
+          operators: undefined // Remove Set for JSON serialization
+        }))
+        .sort((a, b) => b.total_flights - a.total_flights)
+        .slice(0, 10) // Top 10 airports
+        
+      const secondLocationAirportList = Array.from(secondLocationAirports.values())
+        .map(airport => ({
+          ...airport,
+          operator_count: airport.operators.size,
+          operators: undefined // Remove Set for JSON serialization
+        }))
+        .sort((a, b) => b.total_flights - a.total_flights)
+        .slice(0, 10) // Top 10 airports
+
       const result = {
         message: `Found ${qualifiedOperators.length} operators serving both geographic locations`,
         search_criteria: {
@@ -362,11 +425,17 @@ serve(async (req: Request) => {
         },
         time_range: { start_time, end_time },
         operators: qualifiedOperators,
+        airports: {
+          first_location: firstLocationAirportList,
+          second_location: secondLocationAirportList
+        },
         summary: {
           total_operators: qualifiedOperators.length,
           total_flights: qualifiedOperators.reduce((sum, op) => sum + op.total_flights, 0),
           freighter_flights: qualifiedOperators.reduce((sum, op) => sum + op.freighter_flights, 0),
-          passenger_flights: qualifiedOperators.reduce((sum, op) => sum + op.passenger_flights, 0)
+          passenger_flights: qualifiedOperators.reduce((sum, op) => sum + op.passenger_flights, 0),
+          first_location_airports: firstLocationAirportList.length,
+          second_location_airports: secondLocationAirportList.length
         }
       }
 

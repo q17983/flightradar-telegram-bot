@@ -360,27 +360,34 @@ def format_geographic_operator_results(results: dict) -> dict:
     
     messages = []
     
-    # Message 1: Summary + Top 5 operators (basic info only)
+    # Message 1: Summary + ALL operators with clickable names
     message1 = header
-    for i, op in enumerate(operators[:5], 1):  # Top 5 operators for first message
+    message1 += f"📋 **ALL OPERATORS** ({len(operators)} total):\n\n"
+    
+    for i, op in enumerate(operators, 1):
         operator_name = op.get('operator', 'Unknown')
         operator_iata = op.get('operator_iata_code') or 'N/A'
-        operator_icao = op.get('operator_icao_code') or 'N/A'
         total_flights = op.get('total_flights', 0)
         freighter_percentage = op.get('freighter_percentage', 0)
         passenger_percentage = op.get('passenger_percentage', 0)
         
-        message1 += f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
+        # For now, use regular operator names - clickable buttons will be at the end
+        message1 += f"{i}. **{operator_name}** ({operator_iata})\n"
         message1 += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n\n"
-    
-    messages.append(message1)
-    
-    # Message 2: Detailed Fleet Breakdown for Top 5 operators
-    if len(operators) > 0:
-        message2 = f"🛩️ **DETAILED FLEET BREAKDOWN**\n"
-        message2 += f"*Top {min(5, len(operators))} operators with aircraft details*\n\n"
         
-        for i, op in enumerate(operators[:5], 1):
+        # Split into multiple messages if getting too long
+        if len(message1) > 3500:
+            messages.append(message1)
+            message1 = f"📋 **OPERATORS** (continued):\n\n"
+    
+    if message1.strip() and not message1.endswith("📋 **OPERATORS** (continued):\n\n"):
+        messages.append(message1)
+    
+    # Message 2: Top 10 Operators with Aircraft Details
+    if len(operators) > 0:
+        message2 = f"🛩️ **TOP 10 OPERATORS - FLEET BREAKDOWN**\n\n"
+        
+        for i, op in enumerate(operators[:10], 1):
             operator_name = op.get('operator', 'Unknown')
             operator_iata = op.get('operator_iata_code') or 'N/A'
             total_flights = op.get('total_flights', 0)
@@ -395,7 +402,7 @@ def format_geographic_operator_results(results: dict) -> dict:
             # Show freighter aircraft
             if freighter_aircraft:
                 message2 += f"   🚛 **Freighter Fleet:**\n"
-                for aircraft in freighter_aircraft[:5]:  # Top 5 freighter types
+                for aircraft in freighter_aircraft[:3]:  # Top 3 freighter types
                     aircraft_type = aircraft.get('aircraft_type', 'Unknown')
                     flights = aircraft.get('flights', 0)
                     message2 += f"      • {aircraft_type}: {flights:,} flights\n"
@@ -403,7 +410,7 @@ def format_geographic_operator_results(results: dict) -> dict:
             # Show passenger aircraft  
             if passenger_aircraft:
                 message2 += f"   ✈️ **Passenger Fleet:**\n"
-                for aircraft in passenger_aircraft[:5]:  # Top 5 passenger types
+                for aircraft in passenger_aircraft[:3]:  # Top 3 passenger types
                     aircraft_type = aircraft.get('aircraft_type', 'Unknown')
                     flights = aircraft.get('flights', 0)
                     message2 += f"      • {aircraft_type}: {flights:,} flights\n"
@@ -416,21 +423,40 @@ def format_geographic_operator_results(results: dict) -> dict:
         
         messages.append(message2)
     
-    # Message 3: Additional operators (6-10) if available
-    if len(operators) > 5:
-        message3 = f"📊 **ADDITIONAL OPERATORS**\n"
-        message3 += f"*Operators 6-{min(10, len(operators))} serving both locations*\n\n"
+    # Message 3: Airport Breakdown
+    airports_data = results.get('airports', {})
+    first_location_airports = airports_data.get('first_location', [])
+    second_location_airports = airports_data.get('second_location', [])
+    
+    if first_location_airports or second_location_airports:
+        first_loc = search_criteria.get("first_location", {})
+        second_loc = search_criteria.get("second_location", {})
         
-        for i, op in enumerate(operators[5:10], 6):  # Operators 6-10
-            operator_name = op.get('operator', 'Unknown')
-            operator_iata = op.get('operator_iata_code') or 'N/A'
-            operator_icao = op.get('operator_icao_code') or 'N/A'
-            total_flights = op.get('total_flights', 0)
-            freighter_percentage = op.get('freighter_percentage', 0)
-            passenger_percentage = op.get('passenger_percentage', 0)
-            
-            message3 += f"{i}. **{operator_name}** ({operator_iata}/{operator_icao})\n"
-            message3 += f"   ✈️ {total_flights:,} flights ({freighter_percentage}% freight, {passenger_percentage}% pax)\n\n"
+        message3 = f"🏢 **TOP AIRPORTS BREAKDOWN**\n\n"
+        
+        if first_location_airports:
+            message3 += f"📍 **{first_loc.get('value')} ({first_loc.get('type')}) - Top 10 Airports:**\n"
+            for i, airport in enumerate(first_location_airports[:10], 1):
+                airport_name = airport.get('airport_name', 'Unknown')
+                iata_code = airport.get('iata_code', '???')
+                total_flights = airport.get('total_flights', 0)
+                operator_count = airport.get('operator_count', 0)
+                country = airport.get('country', 'Unknown')
+                
+                message3 += f"{i}. **{airport_name}** ({iata_code})\n"
+                message3 += f"   🌍 {country} | ✈️ {total_flights:,} flights | 🏢 {operator_count} operators\n\n"
+        
+        if second_location_airports:
+            message3 += f"📍 **{second_loc.get('value')} ({second_loc.get('type')}) - Top 10 Airports:**\n"
+            for i, airport in enumerate(second_location_airports[:10], 1):
+                airport_name = airport.get('airport_name', 'Unknown')
+                iata_code = airport.get('iata_code', '???')
+                total_flights = airport.get('total_flights', 0)
+                operator_count = airport.get('operator_count', 0)
+                country = airport.get('country', 'Unknown')
+                
+                message3 += f"{i}. **{airport_name}** ({iata_code})\n"
+                message3 += f"   🌍 {country} | ✈️ {total_flights:,} flights | 🏢 {operator_count} operators\n\n"
         
         messages.append(message3)
     
