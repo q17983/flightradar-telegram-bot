@@ -348,68 +348,62 @@ serve(async (req: Request) => {
 
       console.log("✅ Found", qualifiedOperators.length, "operators serving both geographic locations")
 
-      // 8. Calculate airport breakdown for each location
-      const firstLocationAirports = new Map()
-      const secondLocationAirports = new Map()
+      // 8. Calculate airport breakdown per operator for each location
+      const operatorAirportBreakdown = new Map()
       
-      // Aggregate flights by airport for each location
-      for (const row of rows) {
-        const isFirstLocation = row.serves_first_location
-        const isSecondLocation = row.serves_second_location
+      // Build airport breakdown per operator
+      queryResult.rows.forEach(flight => {
+        const operatorKey = `${flight.operator_iata_code}|${flight.operator}`
         
-        if (isFirstLocation) {
-          const airportKey = `${row.destination_code}|${row.destination_name}`
-          if (!firstLocationAirports.has(airportKey)) {
-            firstLocationAirports.set(airportKey, {
-              iata_code: row.destination_code,
-              airport_name: row.destination_name,
-              country: row.dest_country,
-              continent: row.dest_continent,
-              total_flights: 0,
-              operators: new Set()
-            })
-          }
-          const airport = firstLocationAirports.get(airportKey)
-          airport.total_flights += row.frequency
-          airport.operators.add(row.operator)
+        if (!operatorAirportBreakdown.has(operatorKey)) {
+          operatorAirportBreakdown.set(operatorKey, {
+            operator: flight.operator,
+            operator_iata_code: flight.operator_iata_code,
+            first_location_airports: new Map(),
+            second_location_airports: new Map()
+          })
         }
         
-        if (isSecondLocation) {
-          const airportKey = `${row.destination_code}|${row.destination_name}`
-          if (!secondLocationAirports.has(airportKey)) {
-            secondLocationAirports.set(airportKey, {
-              iata_code: row.destination_code,
-              airport_name: row.destination_name,
-              country: row.dest_country,
-              continent: row.dest_continent,
-              total_flights: 0,
-              operators: new Set()
+        const operatorData = operatorAirportBreakdown.get(operatorKey)
+        const flightCount = Number(flight.frequency)
+        
+        // Track airports by location match
+        if (flight.location_match === 'first_location') {
+          const airportCode = flight.destination_code
+          if (!operatorData.first_location_airports.has(airportCode)) {
+            operatorData.first_location_airports.set(airportCode, {
+              iata_code: airportCode,
+              airport_name: flight.destination_name,
+              flights: 0
             })
           }
-          const airport = secondLocationAirports.get(airportKey)
-          airport.total_flights += row.frequency
-          airport.operators.add(row.operator)
+          operatorData.first_location_airports.get(airportCode).flights += flightCount
+        } else if (flight.location_match === 'second_location') {
+          const airportCode = flight.destination_code
+          if (!operatorData.second_location_airports.has(airportCode)) {
+            operatorData.second_location_airports.set(airportCode, {
+              iata_code: airportCode,
+              airport_name: flight.destination_name,
+              flights: 0
+            })
+          }
+          operatorData.second_location_airports.get(airportCode).flights += flightCount
         }
-      }
+      })
       
-      // Convert to arrays and sort by flights
-      const firstLocationAirportList = Array.from(firstLocationAirports.values())
-        .map(airport => ({
-          ...airport,
-          operator_count: airport.operators.size,
-          operators: undefined // Remove Set for JSON serialization
+      // Convert to arrays and sort airports by flights for each operator
+      const airportBreakdownByOperator = Array.from(operatorAirportBreakdown.values())
+        .map(operatorData => ({
+          operator: operatorData.operator,
+          operator_iata_code: operatorData.operator_iata_code,
+          first_location_airports: Array.from(operatorData.first_location_airports.values())
+            .sort((a, b) => b.flights - a.flights)
+            .slice(0, 10), // Top 10 airports per operator
+          second_location_airports: Array.from(operatorData.second_location_airports.values())
+            .sort((a, b) => b.flights - a.flights)
+            .slice(0, 10) // Top 10 airports per operator
         }))
-        .sort((a, b) => b.total_flights - a.total_flights)
-        .slice(0, 10) // Top 10 airports
-        
-      const secondLocationAirportList = Array.from(secondLocationAirports.values())
-        .map(airport => ({
-          ...airport,
-          operator_count: airport.operators.size,
-          operators: undefined // Remove Set for JSON serialization
-        }))
-        .sort((a, b) => b.total_flights - a.total_flights)
-        .slice(0, 10) // Top 10 airports
+        .filter(op => op.first_location_airports.length > 0 || op.second_location_airports.length > 0)
 
       const result = {
         message: `Found ${qualifiedOperators.length} operators serving both geographic locations`,
@@ -425,17 +419,12 @@ serve(async (req: Request) => {
         },
         time_range: { start_time, end_time },
         operators: qualifiedOperators,
-        airports: {
-          first_location: firstLocationAirportList,
-          second_location: secondLocationAirportList
-        },
+        airport_breakdown_by_operator: airportBreakdownByOperator,
         summary: {
           total_operators: qualifiedOperators.length,
           total_flights: qualifiedOperators.reduce((sum, op) => sum + op.total_flights, 0),
           freighter_flights: qualifiedOperators.reduce((sum, op) => sum + op.freighter_flights, 0),
-          passenger_flights: qualifiedOperators.reduce((sum, op) => sum + op.passenger_flights, 0),
-          first_location_airports: firstLocationAirportList.length,
-          second_location_airports: secondLocationAirportList.length
+          passenger_flights: qualifiedOperators.reduce((sum, op) => sum + op.passenger_flights, 0)
         }
       }
 
