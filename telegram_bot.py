@@ -11,7 +11,7 @@ import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://prcnxrkyjnpljoqiazkp.supabase.co"
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
@@ -42,21 +42,20 @@ if not TELEGRAM_BOT_TOKEN:
     print("   3. Add token to .env file: TELEGRAM_BOT_TOKEN=your_token")
     exit()
 
-if not GEMINI_API_KEY:
-    print("❌ Error: GEMINI_API_KEY not found in .env file.")
+if not OPENAI_API_KEY:
+    print("❌ Error: OPENAI_API_KEY not found in .env file.")
     exit()
 
 if not SUPABASE_ANON_KEY:
     print("❌ Error: SUPABASE_ANON_KEY not found in .env file.")
     exit()
 
-# Initialize Gemini
+# Initialize OpenAI
 try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    logger.info("✅ Gemini AI initialized successfully")
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    logger.info("✅ OpenAI initialized successfully")
 except Exception as e:
-    logger.error(f"❌ Error initializing Gemini: {e}")
+    logger.error(f"❌ Error initializing OpenAI: {e}")
     exit()
 
 # Core Function mapping for Supabase Edge Functions (Primary 4 Functions)
@@ -107,8 +106,8 @@ BACKUP_FUNCTION_MAP = {
     }
 }
 
-async def analyze_query_with_gemini(user_query: str) -> dict:
-    """Use Gemini to analyze user query and determine intent."""
+async def analyze_query_with_openai(user_query: str) -> dict:
+    """Use OpenAI to analyze user query and determine intent."""
     
     prompt = f"""
 You are a flight data assistant for a cargo charter broker. Analyze this query and return the best function to call from the 4 CORE FUNCTIONS only.
@@ -156,8 +155,17 @@ Return JSON:
 """
 
     try:
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a flight data assistant for a cargo charter broker. Always return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.1
+        )
+        
+        response_text = response.choices[0].message.content.strip()
         
         # Handle code blocks
         if "```json" in response_text:
@@ -172,7 +180,7 @@ Return JSON:
         return json.loads(response_text)
         
     except Exception as e:
-        logger.error(f"Error with Gemini: {e}")
+        logger.error(f"Error with OpenAI: {e}")
         return None
 
 async def call_supabase_function(function_name: str, parameters: dict) -> dict:
@@ -845,8 +853,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await handle_operator_search(update, context, search_term)
                 return
         
-        # Analyze query with Gemini for other functions
-        analysis = await analyze_query_with_gemini(user_query)
+        # Analyze query with OpenAI for other functions
+        analysis = await analyze_query_with_openai(user_query)
         
         if not analysis:
             await update.message.reply_text(
@@ -855,7 +863,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
         
         # Debug: Log the analysis result
-        logger.info(f"Gemini analysis: {analysis}")
+        logger.info(f"OpenAI analysis: {analysis}")
         
         # Call Supabase function
         results = await call_supabase_function(
