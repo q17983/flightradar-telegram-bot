@@ -1239,7 +1239,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             func_id = callback_data.split("_")[-1]
             
             if func_id == "1":
-                await query.edit_message_text(
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text(
                     "🏢 **Operators by Destination Selected** ✅\n\n"
                     "Enter your query for finding operators flying to a specific airport.\n\n"
                     "**Examples:**\n"
@@ -1247,12 +1248,14 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     "• \"Operators to SCL\"\n"
                     "• \"Airlines flying to TLV\"\n\n"
                     "💬 **Type your query now:**\n"
-                    "💡 **This selection will stay active until you change it**"
+                    "💡 **This selection will stay active until you change it**\n\n"
+                    "📌 **Function menu remains pinned above for easy switching**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_destination'
                 
             elif func_id == "8":
-                await query.edit_message_text(
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text(
                     "🔍 **Operator Details Selected** ✅\n\n"
                     "Enter operator name, IATA, or ICAO code for detailed analysis.\n\n"
                     "**Examples:**\n"
@@ -1260,24 +1263,28 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     "• \"Operator details UPS\"\n"
                     "• \"Show operator AA\"\n\n"
                     "💬 **Type your query now:**\n"
-                    "💡 **This selection will stay active until you change it**"
+                    "💡 **This selection will stay active until you change it**\n\n"
+                    "📌 **Function menu remains pinned above for easy switching**"
                 )
                 context.user_data['selected_function'] = 'get_operator_details'
                 
             elif func_id == "9":
-                await query.edit_message_text(
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text(
                     "🗺️ **Multi-Destination Operators Selected** ✅\n\n"
                     "Enter your query for finding operators serving multiple airports.\n\n"
                     "**Examples:**\n"
                     "• \"Operators to both JFK and LAX\"\n"
                     "• \"Which airlines fly to both HKG and NRT?\"\n\n"
                     "💬 **Type your query now:**\n"
-                    "💡 **This selection will stay active until you change it**"
+                    "💡 **This selection will stay active until you change it**\n\n"
+                    "📌 **Function menu remains pinned above for easy switching**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_multi_destinations'
                 
             elif func_id == "10":
-                await query.edit_message_text(
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text(
                     "🌍 **Geographic Operators Selected** ✅\n\n"
                     "Enter your query for finding operators between countries, continents, or airports.\n\n"
                     "**Examples:**\n"
@@ -1285,14 +1292,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     "• \"China to Chile operators\" (country to country)\n"
                     "• \"Korea to Taiwan operators\"\n\n"
                     "💬 **Type your query now:**\n"
-                    "💡 **This selection will stay active until you change it**"
+                    "💡 **This selection will stay active until you change it**\n\n"
+                    "📌 **Function menu remains pinned above for easy switching**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_geographic_locations'
             
             await query.answer()
             
         elif callback_data == "cancel_selection":
-            await query.edit_message_text("❌ Function selection cancelled. You can type any query or use /selectfunction again.")
+            # Send new message instead of editing the pinned menu
+            await query.message.reply_text("❌ Function selection cancelled. You can type any query or use /selectfunction again.")
             await query.answer()
             
         elif callback_data == "unpin_menu":
@@ -1302,11 +1311,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     chat_id=query.message.chat_id,
                     message_id=query.message.message_id
                 )
-                await query.edit_message_text("📌 **Function menu unpinned**\n\nYou can still use /selectfunction to show the menu again.")
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text("📌 **Function menu unpinned**\n\nYou can still use /selectfunction to show the menu again.")
                 logger.info("✅ Function selection menu unpinned successfully")
             except Exception as e:
                 logger.error(f"❌ Failed to unpin message: {e}")
-                await query.edit_message_text("❌ Failed to unpin menu. You can still use /selectfunction to show the menu again.")
+                await query.message.reply_text("❌ Failed to unpin menu. You can still use /selectfunction to show the menu again.")
             await query.answer()
             
     except Exception as e:
