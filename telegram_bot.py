@@ -428,13 +428,24 @@ def format_geographic_operator_results(results: dict) -> dict:
             freighter_aircraft = fleet_breakdown.get('freighter_aircraft', [])
             passenger_aircraft = fleet_breakdown.get('passenger_aircraft', [])
             
-            # Show freighter aircraft
+            # Show freighter aircraft with airport details
             if freighter_aircraft:
                 message2 += f"   🚛 **Freighter Fleet:**\n"
                 for aircraft in freighter_aircraft[:3]:  # Top 3 freighter types
                     aircraft_type = aircraft.get('aircraft_type', 'Unknown')
                     flights = aircraft.get('flights', 0)
+                    destinations = aircraft.get('destinations', [])
+                    
                     message2 += f"      • {aircraft_type}: {flights:,} flights\n"
+                    
+                    # Show top airports for this aircraft type
+                    if destinations:
+                        airport_list = []
+                        for dest in destinations[:5]:  # Top 5 airports per aircraft type
+                            airport_code = dest.get('code', '???')
+                            airport_flights = dest.get('flights', 0)
+                            airport_list.append(f"{airport_code}: {airport_flights}")
+                        message2 += f"        └ Airports: {', '.join(airport_list)}\n"
             
             # Show passenger aircraft  
             if passenger_aircraft:
