@@ -911,7 +911,7 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(functions_text, parse_mode='Markdown')
 
 async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show function selection menu."""
+    """Show function selection menu and pin it."""
     keyboard = [
         [
             InlineKeyboardButton("🏢 Operators by Destination", callback_data="select_func_1"),
@@ -922,15 +922,16 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton("🌍 Geographic Operators", callback_data="select_func_10")
         ],
         [
-            InlineKeyboardButton("❌ Cancel", callback_data="cancel_selection")
+            InlineKeyboardButton("❌ Cancel", callback_data="cancel_selection"),
+            InlineKeyboardButton("📌 Unpin Menu", callback_data="unpin_menu")
         ]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Pin the message to the top
-    await update.message.reply_text(
-        "📌 **FUNCTION SELECTION MENU** (Pinned)\n\n"
+    # Send the function selection menu
+    message = await update.message.reply_text(
+        "📌 **FUNCTION SELECTION MENU**\n\n"
         "Choose which type of analysis you want:\n\n"
         "🏢 **Operators by Destination** (Function 1)\n"
         "   *Find operators flying to specific airports*\n"
@@ -949,6 +950,18 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
+    
+    # Pin the message to the top of the chat
+    try:
+        await context.bot.pin_chat_message(
+            chat_id=update.effective_chat.id,
+            message_id=message.message_id,
+            disable_notification=True
+        )
+        logger.info("✅ Function selection menu pinned successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to pin message: {e}")
+        # Continue even if pinning fails
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming text messages."""
@@ -1280,6 +1293,20 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             
         elif callback_data == "cancel_selection":
             await query.edit_message_text("❌ Function selection cancelled. You can type any query or use /selectfunction again.")
+            await query.answer()
+            
+        elif callback_data == "unpin_menu":
+            try:
+                # Unpin the current message
+                await context.bot.unpin_chat_message(
+                    chat_id=query.message.chat_id,
+                    message_id=query.message.message_id
+                )
+                await query.edit_message_text("📌 **Function menu unpinned**\n\nYou can still use /selectfunction to show the menu again.")
+                logger.info("✅ Function selection menu unpinned successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to unpin message: {e}")
+                await query.edit_message_text("❌ Failed to unpin menu. You can still use /selectfunction to show the menu again.")
             await query.answer()
             
     except Exception as e:
