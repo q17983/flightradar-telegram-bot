@@ -241,7 +241,7 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
     ORDER BY a.aircraft_details, a.registration;
   `
 
-  // Route Analysis Query
+  // Route Analysis Query - Enhanced to show TOP 30 destinations
   const routeSql = `
     SELECT 
         m.destination_code,
@@ -255,7 +255,7 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
       AND m.scheduled_departure <= $3
     GROUP BY m.destination_code
     ORDER BY total_flights DESC
-    LIMIT 20;
+    LIMIT 30;
   `
 
   // Execute both queries

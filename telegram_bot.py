@@ -963,6 +963,43 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.error(f"❌ Failed to pin message: {e}")
         # Continue even if pinning fails
 
+async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                  operator_name: str, geography_input: str, filter_type: str) -> None:
+    """Handle geographic filtering for Function 8."""
+    try:
+        # Send loading message
+        await update.message.reply_text(f"🔍 Searching {operator_name} destinations in {geography_input}...")
+        
+        # Call the enhanced Supabase function with geographic filtering
+        # Note: This will require the Supabase function to be enhanced in Phase 2
+        results = await call_supabase_function("get_operator_details", {
+            "operator_selection": operator_name,
+            "geographic_filter": geography_input,
+            "filter_type": filter_type
+        })
+        
+        if results.get("error"):
+            await update.message.reply_text(f"❌ {results['error']}")
+            return
+        
+        # Format the geographic results
+        response_text = format_geographic_destinations(results, operator_name, geography_input, filter_type)
+        
+        # Send results with back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to Full Details", 
+                                        callback_data=f"back_to_operator_{operator_name.replace(' ', '_')}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            text=response_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in geographic filter: {e}")
+        await update.message.reply_text("❌ Error processing geographic filter. Please try again.")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming text messages."""
     user_query = update.message.text
@@ -970,6 +1007,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     logger.info(f"Query from {user_name}: {user_query}")
     
+    # ENHANCED: Check if user is entering geographic filter input
+    if context.user_data.get('awaiting_country_filter'):
+        operator_name = context.user_data.pop('awaiting_country_filter')
+        await handle_geographic_filter(update, context, operator_name, user_query, "country")
+        return
+    
+    if context.user_data.get('awaiting_continent_filter'):
+        operator_name = context.user_data.pop('awaiting_continent_filter')
+        await handle_geographic_filter(update, context, operator_name, user_query, "continent")
+        return
     
     # TEMPORARY: Direct test of Function 9
     if user_query.lower() == "test function 9":
@@ -1209,7 +1256,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 await query.message.reply_text(
                     text=response_text,
                     parse_mode='Markdown',
-                    reply_markup=create_details_keyboard()
+                    reply_markup=create_details_keyboard(operator_name)
                 )
                 # Acknowledge the button click
                 await query.answer("✅ Operator details loaded!")
@@ -1218,7 +1265,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 await query.edit_message_text(
                     text=response_text,
                     parse_mode='Markdown',
-                    reply_markup=create_details_keyboard()
+                    reply_markup=create_details_keyboard(operator_name)
                 )
                 await query.answer()
             
@@ -1318,6 +1365,44 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 logger.error(f"❌ Failed to unpin message: {e}")
                 await query.message.reply_text("❌ Failed to unpin menu. You can still use /selectfunction to show the menu again.")
             await query.answer()
+        
+        # ENHANCED: Geographic filtering handlers for Function 8
+        elif callback_data.startswith("geo_filter_"):
+            filter_parts = callback_data.split("_", 3)
+            if len(filter_parts) >= 4:
+                filter_type = filter_parts[2]  # "country" or "continent"
+                operator_name = filter_parts[3].replace("_", " ").replace("and", "&")
+                
+                if filter_type == "country":
+                    await query.message.reply_text(
+                        f"🌍 **Country Filter for {operator_name}**\n\n"
+                        "Enter the country name to see destinations:\n\n"
+                        "**Examples:**\n"
+                        "• China\n"
+                        "• Germany\n"
+                        "• United States\n"
+                        "• Japan\n"
+                        "• United Kingdom\n\n"
+                        "💬 **Type country name:**"
+                    )
+                    context.user_data['awaiting_country_filter'] = operator_name
+                    
+                elif filter_type == "continent":
+                    await query.message.reply_text(
+                        f"🗺️ **Continent Filter for {operator_name}**\n\n"
+                        "Enter the continent name to see destinations:\n\n"
+                        "**Examples:**\n"
+                        "• Asia\n"
+                        "• Europe\n"
+                        "• North America\n"
+                        "• South America\n"
+                        "• Africa\n"
+                        "• Oceania\n\n"
+                        "💬 **Type continent name:**"
+                    )
+                    context.user_data['awaiting_continent_filter'] = operator_name
+                    
+            await query.answer()
             
     except Exception as e:
         logger.error(f"Error handling callback query: {e}")
@@ -1335,11 +1420,27 @@ def get_operator_emoji(operator: dict) -> str:
     else:
         return "✈️"  # Passenger
 
-def create_details_keyboard() -> InlineKeyboardMarkup:
-    """Create keyboard for operator details view."""
-    keyboard = [
-        [InlineKeyboardButton("🔄 New Search", callback_data="new_search")]
-    ]
+def create_details_keyboard(operator_name: str = "") -> InlineKeyboardMarkup:
+    """Create enhanced keyboard for operator details view with geographic filtering."""
+    keyboard = []
+    
+    # ENHANCED: Add geographic filtering buttons if we have an operator
+    if operator_name:
+        # Clean operator name for callback data (remove spaces and special chars)
+        clean_operator = operator_name.replace(" ", "_").replace("&", "and")
+        
+        keyboard.extend([
+            [
+                InlineKeyboardButton("🌍 Filter by Country", 
+                                   callback_data=f"geo_filter_country_{clean_operator}"),
+                InlineKeyboardButton("🗺️ Filter by Continent", 
+                                   callback_data=f"geo_filter_continent_{clean_operator}")
+            ]
+        ])
+    
+    # Standard buttons
+    keyboard.append([InlineKeyboardButton("🔄 New Search", callback_data="new_search")])
+    
     return InlineKeyboardMarkup(keyboard)
 
 def format_operator_details(results: dict) -> str:
@@ -1370,10 +1471,10 @@ def format_operator_details(results: dict) -> str:
     message += f"📊 *Total Aircraft: {total_aircraft} ({freighter_pct}% freighter, {passenger_pct}% passenger)*\n"
     message += f"🔢 *Aircraft Types: {unique_types} different models*\n\n"
     
-    # Fleet Breakdown (show top 10)
+    # ENHANCED: Fleet Breakdown (show ALL aircraft)
     if fleet_breakdown:
-        message += f"🛩️ **FLEET BREAKDOWN** (Top 10):\n"
-        for i, aircraft in enumerate(fleet_breakdown[:10], 1):
+        message += f"🛩️ **COMPLETE FLEET BREAKDOWN** (All {len(fleet_breakdown)} Aircraft Types):\n"
+        for i, aircraft in enumerate(fleet_breakdown, 1):  # ENHANCED: Show ALL aircraft, no limit
             aircraft_type = aircraft.get("aircraft_type", "Unknown")
             aircraft_details = aircraft.get("aircraft_details", "Unknown")
             count = aircraft.get("count", 0)
@@ -1385,18 +1486,16 @@ def format_operator_details(results: dict) -> str:
             
             message += f"{i}. **{aircraft_details}** ({count} aircraft) - {category} {category_emoji}\n"
             
-            # Show first 5 registrations
+            # ENHANCED: Show ALL registrations, no truncation
             if registrations:
-                reg_display = ", ".join(registrations[:5])
-                if len(registrations) > 5:
-                    reg_display += f"... (+{len(registrations) - 5} more)"
+                reg_display = ", ".join(registrations)  # Show all registrations
                 message += f"   • {reg_display}\n"
         message += "\n"
     
-    # Top Destinations (show top 10)
+    # ENHANCED: Top Destinations (show top 30)
     if top_destinations:
-        message += f"🌍 **TOP DESTINATIONS** (Top 10):\n"
-        for i, dest in enumerate(top_destinations[:10], 1):
+        message += f"🌍 **TOP 30 DESTINATIONS**:\n"
+        for i, dest in enumerate(top_destinations, 1):  # ENHANCED: Show all 30 destinations
             dest_code = dest.get("destination_code", "Unknown")
             total_flights = dest.get("total_flights", 0)
             aircraft_types = dest.get("aircraft_types_used", [])
@@ -1406,7 +1505,55 @@ def format_operator_details(results: dict) -> str:
             if aircraft_types:
                 types_display = ", ".join(aircraft_types[:3])  # Show first 3 aircraft types
                 message += f"   • Aircraft: {types_display}\n"
+        
+        # ENHANCED: Add geographic filtering call-to-action
+        message += "\n🌍 **GEOGRAPHIC FILTERING AVAILABLE**\n"
+        message += "Use the buttons below to filter destinations by country or continent:\n\n"
+    
+    return message
+
+def format_geographic_destinations(results: dict, operator_name: str, geography_name: str, filter_type: str) -> str:
+    """Format geographic destination filtering results."""
+    if results.get("error"):
+        return f"❌ {results['error']}"
+    
+    geographic_destinations = results.get("geographic_destinations", [])
+    
+    if not geographic_destinations:
+        return (f"❌ No destinations found for **{operator_name}** in **{geography_name}**\n\n"
+                f"This could mean:\n"
+                f"• {operator_name} doesn't serve {geography_name}\n"
+                f"• Geographic data not available\n"
+                f"• Spelling variation (try alternative names)")
+    
+    # Build the response message
+    total_destinations = len(geographic_destinations)
+    total_flights = sum(dest.get('total_flights', 0) for dest in geographic_destinations)
+    
+    flag_emoji = "🌍" if filter_type == "country" else "🗺️"
+    message = f"{flag_emoji} **{operator_name} Destinations in {geography_name}**\n\n"
+    message += f"📊 **Summary:** {total_destinations} airports, {total_flights:,} total flights\n\n"
+    
+    # List each destination with aircraft breakdown
+    for i, dest in enumerate(geographic_destinations, 1):
+        dest_code = dest.get('destination_code', 'Unknown')
+        airport_name = dest.get('airport_name', 'Unknown Airport')
+        total_flights = dest.get('total_flights', 0)
+        aircraft_types = dest.get('aircraft_types_used', [])
+        avg_monthly = dest.get('avg_flights_per_month', 0)
+        
+        message += f"{i}. **{dest_code}** - {airport_name}\n"
+        message += f"   🛫 {total_flights:,} flights ({avg_monthly} avg/month)\n"
+        
+        if aircraft_types:
+            aircraft_display = ", ".join(aircraft_types[:4])  # Show first 4 aircraft types
+            if len(aircraft_types) > 4:
+                aircraft_display += f" (+{len(aircraft_types) - 4} more)"
+            message += f"   ✈️ Aircraft: {aircraft_display}\n"
+        
         message += "\n"
+    
+    message += f"🔄 **Use the button below to return to full {operator_name} details**"
     
     return message
 
