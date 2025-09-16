@@ -120,13 +120,45 @@ async function getAvailableAircraftTypes(connection: any) {
       console.log("First 5 aircraft types:", result.rows.slice(0, 5))
     }
     
-    const aircraftTypes = result.rows.map(row => ({
-      aircraft_type: row.aircraft_type,
-      aircraft_count: Number(row.aircraft_count),
-      operator_count: Number(row.operator_count)
-    }))
+  let aircraftTypes = result.rows.map(row => ({
+    aircraft_type: row.aircraft_type,
+    aircraft_count: Number(row.aircraft_count),
+    operator_count: Number(row.operator_count)
+  }))
+  
+  // Sort aircraft types: Boeing first (737, 757, 767, 777, 787, etc.), then Airbus, then others
+  aircraftTypes.sort((a, b) => {
+    const typeA = a.aircraft_type
+    const typeB = b.aircraft_type
     
-    console.log(`Successfully processed ${aircraftTypes.length} aircraft types`)
+    // Helper function to get sort priority
+    const getSortPriority = (type) => {
+      if (type.startsWith('B7')) {
+        // Boeing 7xx series - sort by number
+        const num = parseInt(type.substring(1))
+        return 1000 + num // Boeing 737 = 1737, Boeing 777 = 1777
+      } else if (type.startsWith('B')) {
+        // Other Boeing aircraft
+        const num = parseInt(type.substring(1)) || 999
+        return 2000 + num // Boeing 747 = 2747, etc.
+      } else if (type.startsWith('A3')) {
+        // Airbus A3xx series
+        const num = parseInt(type.substring(1))
+        return 3000 + num // A330 = 3330, A350 = 3350
+      } else if (type.startsWith('A')) {
+        // Other Airbus aircraft
+        const num = parseInt(type.substring(1)) || 999
+        return 4000 + num
+      } else {
+        // Other manufacturers (IL76, etc.)
+        return 9000 + type.charCodeAt(0)
+      }
+    }
+    
+    return getSortPriority(typeA) - getSortPriority(typeB)
+  })
+  
+  console.log(`Successfully processed and sorted ${aircraftTypes.length} aircraft types`)
     
     return new Response(
       JSON.stringify({
@@ -174,46 +206,31 @@ async function searchOperatorsByAircraftAndDestinations(
   
   console.log("Parsed destinations:", { airportCodes, countryPatterns, continentCodes })
   
+  // SIMPLIFIED QUERY - Remove complex subqueries to avoid timeout
   const searchSql = `
     SELECT 
         a.operator,
         a.operator_iata_code,
         a.operator_icao_code,
-        array_agg(DISTINCT a.type ORDER BY a.type) as available_aircraft_types,
-        COUNT(DISTINCT a.registration) as total_fleet_size,
-        COUNT(DISTINCT CASE WHEN a.type = ANY($1) THEN a.registration END) as matching_fleet_size,
+        COUNT(DISTINCT a.registration) as matching_fleet_size,
         COUNT(DISTINCT m.destination_code) as destination_count,
         COUNT(*) as total_flights,
-        array_agg(DISTINCT m.destination_code ORDER BY m.destination_code) as served_destinations,
-        ROUND(COUNT(*) / 12.0, 1) as avg_monthly_flights,
-        -- Get sample routes for top destinations
-        array_agg(DISTINCT 
-          CASE WHEN m.destination_code IN (
-            SELECT sub_m.destination_code 
-            FROM movements sub_m 
-            JOIN aircraft sub_a ON sub_m.registration = sub_a.registration 
-            WHERE sub_a.operator = a.operator 
-            GROUP BY sub_m.destination_code 
-            ORDER BY COUNT(*) DESC 
-            LIMIT 3
-          ) 
-          THEN m.destination_code || ' (' || a.type || ')'
-          END
-        ) FILTER (WHERE m.destination_code IS NOT NULL) as top_routes_with_aircraft
+        ROUND(COUNT(*) / 12.0, 1) as avg_monthly_flights
     FROM aircraft a
     JOIN movements m ON a.registration = m.registration
     LEFT JOIN airports_geography ag ON m.destination_code = ag.iata_code
     WHERE a.type = ANY($1)  -- Aircraft types filter
       AND (
-        ($2::text[] IS NULL OR array_length($2::text[], 1) IS NULL OR m.destination_code = ANY($2))  -- Airport codes
-        OR ($3::text[] IS NULL OR array_length($3::text[], 1) IS NULL OR ag.country_name ILIKE ANY($3))  -- Country patterns
-        OR ($4::text[] IS NULL OR array_length($4::text[], 1) IS NULL OR ag.continent = ANY($4))  -- Continent codes
+        -- Simple destination matching (exclude dummy values)
+        (m.destination_code = ANY($2) AND $2 != ARRAY['NONE'])  -- Airport codes
+        OR (ag.country_name ILIKE ANY($3) AND $3 != ARRAY['%NONE%'])  -- Country patterns  
+        OR (ag.continent = ANY($4) AND $4 != ARRAY['NONE'])  -- Continent codes
       )
       AND m.scheduled_departure >= $5::date
       AND m.scheduled_departure <= $6::date
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
-    HAVING COUNT(DISTINCT CASE WHEN a.type = ANY($1) THEN a.registration END) > 0  -- Must have matching aircraft
-    ORDER BY total_flights DESC;  -- NO LIMIT - show ALL results
+    ORDER BY total_flights DESC
+    LIMIT 50;  -- Limit results to prevent timeout
   `
   
   console.log("Executing search with parameters:", {
@@ -227,9 +244,9 @@ async function searchOperatorsByAircraftAndDestinations(
 
   const searchResult = await connection.queryObject(searchSql, [
     aircraftTypes,  // $1
-    airportCodes.length > 0 ? airportCodes : null,  // $2  
-    countryPatterns.length > 0 ? countryPatterns : null,  // $3
-    continentCodes.length > 0 ? continentCodes : null,  // $4
+    airportCodes.length > 0 ? airportCodes : ['NONE'],  // $2 - Use dummy value instead of null
+    countryPatterns.length > 0 ? countryPatterns : ['%NONE%'],  // $3 - Use dummy pattern instead of null
+    continentCodes.length > 0 ? continentCodes : ['NONE'],  // $4 - Use dummy value instead of null
     startTime,  // $5
     endTime     // $6
   ])
@@ -260,25 +277,21 @@ async function searchOperatorsByAircraftAndDestinations(
     )
   }
   
-  // Process results
+  // Process simplified results
   const operators = searchResult.rows.map(row => ({
     operator: row.operator,
     operator_iata_code: row.operator_iata_code,
     operator_icao_code: row.operator_icao_code,
-    available_aircraft_types: row.available_aircraft_types || [],
-    total_fleet_size: Number(row.total_fleet_size),
     matching_fleet_size: Number(row.matching_fleet_size),
     destination_count: Number(row.destination_count),
     total_flights: Number(row.total_flights),
-    served_destinations: row.served_destinations || [],
-    avg_monthly_flights: Number(row.avg_monthly_flights),
-    top_routes_with_aircraft: (row.top_routes_with_aircraft || []).filter(route => route != null)
+    avg_monthly_flights: Number(row.avg_monthly_flights)
   }))
   
   // Calculate summary statistics
   const totalOperators = operators.length
   const totalFlights = operators.reduce((sum, op) => sum + op.total_flights, 0)
-  const totalDestinations = new Set(operators.flatMap(op => op.served_destinations)).size
+  const totalDestinations = operators.reduce((sum, op) => sum + op.destination_count, 0)
   
   console.log(`Found ${totalOperators} operators matching search criteria`)
   

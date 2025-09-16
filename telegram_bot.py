@@ -1089,8 +1089,8 @@ async def update_aircraft_selection_menu(query, context: ContextTypes.DEFAULT_TY
     
     message += "Click aircraft types to select/deselect:\n\n"
     
-    # Show aircraft types with statistics
-    for i, aircraft in enumerate(aircraft_types[:12], 1):  # Show top 12
+    # Show ALL aircraft types with statistics (sorted: Boeing, Airbus, Others)
+    for i, aircraft in enumerate(aircraft_types, 1):  # Show ALL aircraft types
         aircraft_type = aircraft.get("aircraft_type", "Unknown")
         aircraft_count = aircraft.get("aircraft_count", 0)
         operator_count = aircraft.get("operator_count", 0)
@@ -1104,8 +1104,8 @@ async def update_aircraft_selection_menu(query, context: ContextTypes.DEFAULT_TY
     # Create keyboard with aircraft buttons
     keyboard = []
     
-    # Aircraft selection buttons (2 per row)
-    for i in range(0, min(len(aircraft_types), 12), 2):
+    # Aircraft selection buttons (2 per row) - Show ALL aircraft types
+    for i in range(0, len(aircraft_types), 2):
         row = []
         for j in range(2):
             if i + j < len(aircraft_types):
@@ -1164,8 +1164,8 @@ async def show_aircraft_selection_menu(update: Update, context: ContextTypes.DEF
     
     message += "Click aircraft types to select/deselect:\n\n"
     
-    # Show aircraft types with statistics
-    for i, aircraft in enumerate(aircraft_types[:12], 1):  # Show top 12
+    # Show ALL aircraft types with statistics (sorted: Boeing, Airbus, Others)
+    for i, aircraft in enumerate(aircraft_types, 1):  # Show ALL aircraft types
         aircraft_type = aircraft.get("aircraft_type", "Unknown")
         aircraft_count = aircraft.get("aircraft_count", 0)
         operator_count = aircraft.get("operator_count", 0)
@@ -1179,8 +1179,8 @@ async def show_aircraft_selection_menu(update: Update, context: ContextTypes.DEF
     # Create keyboard with aircraft buttons
     keyboard = []
     
-    # Aircraft selection buttons (2 per row)
-    for i in range(0, min(len(aircraft_types), 12), 2):
+    # Aircraft selection buttons (2 per row) - Show ALL aircraft types
+    for i in range(0, len(aircraft_types), 2):
         row = []
         for j in range(2):
             if i + j < len(aircraft_types):
