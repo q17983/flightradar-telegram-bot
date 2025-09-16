@@ -155,6 +155,11 @@ FUNCTION SELECTION LOGIC:
    Example: "China to SCL operators" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "SCL"
    Example: "Thailand to North America operators" → first_location_type: "country", first_location_value: "Thailand", second_location_type: "continent", second_location_value: "NA"
 
+5. "[AIRCRAFT TYPES] to [DESTINATIONS]" or aircraft-destination queries → aircraft_to_destination_search
+   Example: "A330 B777 to China" → aircraft_types: ["A330", "B777"], destinations: ["China"]
+   Example: "B747 to JFK LAX" → aircraft_types: ["B747"], destinations: ["JFK", "LAX"]
+   Example: "IL76 A330 to Europe Asia" → aircraft_types: ["IL76", "A330"], destinations: ["Europe", "Asia"]
+
 Return JSON:
 {{
     "function_name": "function_name",
@@ -922,6 +927,9 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton("🌍 Geographic Operators", callback_data="select_func_10")
         ],
         [
+            InlineKeyboardButton("✈️ Aircraft-to-Destination Search", callback_data="select_func_12")
+        ],
+        [
             InlineKeyboardButton("❌ Cancel", callback_data="cancel_selection"),
             InlineKeyboardButton("📌 Unpin Menu", callback_data="unpin_menu")
         ]
@@ -945,6 +953,9 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         "🌍 **Geographic Operators** (Function 10)\n"
         "   *Find operators between countries/continents*\n"
         "   Example: \"PEK to SCL operators\"\n\n"
+        "✈️ **Aircraft-to-Destination Search** (Function 12)\n"
+        "   *Find operators with specific aircraft to destinations*\n"
+        "   Example: \"A330 B777 to China\"\n\n"
         "👆 **Click a button above to continue**\n"
         "💡 **Your selection will stay active until you change it**",
         parse_mode='Markdown',
@@ -1000,6 +1011,211 @@ async def send_large_message(message, text: str, reply_markup=None):
             # Other messages just get the text with a "continued" indicator
             part_with_indicator = part + f"\n\n*📄 Continued in next message... ({i+1}/{len(parts)})*"
             await message.reply_text(text=part_with_indicator, parse_mode='Markdown')
+
+async def handle_aircraft_destination_search(update: Update, context: ContextTypes.DEFAULT_TYPE, user_query: str):
+    """Handle Function 12: Aircraft-to-Destination Search."""
+    try:
+        # Parse the query to extract aircraft types and destinations
+        aircraft_types, destinations = parse_aircraft_destination_query(user_query)
+        
+        if not aircraft_types:
+            await update.message.reply_text(
+                "❌ **Aircraft types not found in query**\n\n"
+                "Please specify aircraft types in your query.\n\n"
+                "**Examples:**\n"
+                "• \"A330 B777 to China\"\n"
+                "• \"B747 to JFK LAX\"\n"
+                "• \"IL76 to Europe\"\n\n"
+                "**Supported aircraft:** A330, B747, B757, B767, B777, IL76, A350, B737, etc.",
+                parse_mode='Markdown'
+            )
+            return
+            
+        if not destinations:
+            await update.message.reply_text(
+                "❌ **Destinations not found in query**\n\n"
+                "Please specify destinations in your query.\n\n"
+                "**Examples:**\n"
+                "• Airport codes: JFK, LAX, LHR\n"
+                "• Countries: China, Germany, Japan\n"
+                "• Continents: Asia, Europe, North America\n\n"
+                "**Format:** [Aircraft Types] to [Destinations]",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Show processing message
+        await update.message.reply_text(
+            f"🔍 **Searching operators with {', '.join(aircraft_types)} to {', '.join(destinations)}...**\n\n"
+            "⏳ Processing comprehensive database search...",
+            parse_mode='Markdown'
+        )
+        
+        # Call Supabase Function 12
+        results = await call_supabase_function("aircraft-to-destination-search", {
+            "mode": "search",
+            "aircraft_types": aircraft_types,
+            "destinations": destinations,
+            "start_time": "2024-04-01",
+            "end_time": "2025-05-31"
+        })
+        
+        # Format and send results
+        response_data = format_aircraft_destination_results(results, aircraft_types, destinations)
+        
+        if response_data["operators"]:
+            # Create operator buttons (Function 10 style)
+            keyboard = []
+            for op in response_data["operators"][:20]:  # Top 20 operators for buttons
+                callback_data = f"select_operator_func12_{op['name']}"
+                button_text = f"📋 {op['name']} Details"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+            
+            # Add additional buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 New Search", callback_data="search_again"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await send_large_message(update.message, response_data["message"], reply_markup)
+        else:
+            await update.message.reply_text(response_data["message"], parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Error in Function 12: {e}")
+        await update.message.reply_text(
+            "❌ **Error processing aircraft-destination search**\n\n"
+            "Please check your query format and try again.\n\n"
+            "**Expected format:** [Aircraft Types] to [Destinations]\n"
+            "**Example:** \"A330 B777 to China Japan\"",
+            parse_mode='Markdown'
+        )
+
+def parse_aircraft_destination_query(query: str) -> tuple[list[str], list[str]]:
+    """Parse aircraft-destination query to extract aircraft types and destinations."""
+    # Common aircraft types (will be dynamically updated from database in future)
+    known_aircraft = ["A330", "A340", "A350", "A380", "B737", "B747", "B757", "B767", "B777", "B787", "IL76", "AN124", "DC8", "MD11"]
+    
+    # Split query on "to" keyword
+    query_lower = query.lower()
+    if " to " in query_lower:
+        parts = query_lower.split(" to ", 1)
+        aircraft_part = parts[0].strip()
+        destination_part = parts[1].strip()
+    else:
+        # Try to detect aircraft types and assume rest are destinations
+        words = query.split()
+        aircraft_part = ""
+        destination_part = ""
+        
+        # Find aircraft types
+        for word in words:
+            if word.upper() in known_aircraft:
+                aircraft_part += word + " "
+            else:
+                destination_part += word + " "
+        
+        aircraft_part = aircraft_part.strip()
+        destination_part = destination_part.strip()
+    
+    # Extract aircraft types
+    aircraft_types = []
+    aircraft_words = aircraft_part.split()
+    for word in aircraft_words:
+        word_upper = word.upper()
+        if word_upper in known_aircraft:
+            aircraft_types.append(word_upper)
+    
+    # Extract destinations
+    destinations = []
+    if destination_part:
+        # Split by common separators
+        dest_words = destination_part.replace(",", " ").replace("and", " ").split()
+        destinations = [word.strip() for word in dest_words if word.strip()]
+    
+    return aircraft_types, destinations
+
+def format_aircraft_destination_results(results: dict, aircraft_types: list[str], destinations: list[str]) -> dict:
+    """Format Function 12 results for Telegram display."""
+    if results.get("error"):
+        return {
+            "message": f"❌ {results['error']}",
+            "operators": []
+        }
+    
+    search_summary = results.get("search_summary", {})
+    operators = results.get("operators", [])
+    
+    if not operators:
+        message = (
+            f"❌ **No operators found**\n\n"
+            f"**Search criteria:**\n"
+            f"• Aircraft: {', '.join(aircraft_types)}\n"
+            f"• Destinations: {', '.join(destinations)}\n\n"
+            f"**Suggestions:**\n"
+            f"• Try different aircraft types\n"
+            f"• Use broader destination names\n"
+            f"• Check spelling of destinations"
+        )
+        return {"message": message, "operators": []}
+    
+    # Build comprehensive results message
+    total_operators = search_summary.get("total_operators", len(operators))
+    total_flights = search_summary.get("total_flights", 0)
+    total_destinations = search_summary.get("total_destinations", 0)
+    
+    message = f"🎯 **AIRCRAFT-TO-DESTINATION SEARCH RESULTS**\n\n"
+    message += f"**Search Criteria:**\n"
+    message += f"✈️ Aircraft: {', '.join(aircraft_types)}\n"
+    message += f"🌍 Destinations: {', '.join(destinations)}\n\n"
+    message += f"📊 **SUMMARY:**\n"
+    message += f"• **Total Operators:** {total_operators:,}\n"
+    message += f"• **Total Flights:** {total_flights:,}\n"
+    message += f"• **Total Destinations:** {total_destinations:,}\n\n"
+    message += f"🏢 **ALL MATCHING OPERATORS:**\n\n"
+    
+    # List all operators (NO LIMITS)
+    for i, op in enumerate(operators, 1):
+        operator_name = op.get("operator", "Unknown")
+        operator_iata = op.get("operator_iata_code") or "N/A"
+        matching_fleet = op.get("matching_fleet_size", 0)
+        total_fleet = op.get("total_fleet_size", 0)
+        total_flights_op = op.get("total_flights", 0)
+        destinations_count = op.get("destination_count", 0)
+        avg_monthly = op.get("avg_monthly_flights", 0)
+        available_types = op.get("available_aircraft_types", [])
+        
+        message += f"{i}️⃣ **{operator_name}** ({operator_iata})\n"
+        message += f"   ✈️ Fleet: {matching_fleet}/{total_fleet} matching aircraft\n"
+        message += f"   🌍 Destinations: {destinations_count} airports\n"
+        message += f"   📈 Flights: {total_flights_op:,} ({avg_monthly} avg/month)\n"
+        
+        # Show aircraft types available
+        if available_types:
+            types_display = ", ".join(available_types[:5])
+            if len(available_types) > 5:
+                types_display += f" (+{len(available_types) - 5} more)"
+            message += f"   🛩️ Aircraft: {types_display}\n"
+        
+        message += "\n"
+    
+    message += f"\n🔗 **QUICK ACCESS TO OPERATOR DETAILS:**\n"
+    message += f"Use the buttons below to get detailed fleet & route analysis for any operator.\n\n"
+    message += f"💡 **Results show ALL {total_operators} operators** - no limits applied!"
+    
+    # Prepare operator data for buttons
+    button_operators = []
+    for op in operators:
+        button_operators.append({
+            "name": op.get("operator", "Unknown"),
+            "iata": op.get("operator_iata_code") or "N/A"
+        })
+    
+    return {
+        "message": message,
+        "operators": button_operators
+    }
 
 async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                   operator_name: str, geography_input: str, filter_type: str) -> None:
@@ -1096,6 +1312,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     # Clear the selection after use
                     context.user_data.pop('selected_function', None)
                     return
+            elif selected_function == 'aircraft_to_destination_search':
+                # Handle Function 12: Aircraft-to-Destination Search
+                await handle_aircraft_destination_search(update, context, user_query)
+                return
             else:
                 # Create analysis with forced function
                 if selected_function == 'get_operators_by_geographic_locations':
@@ -1183,6 +1403,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
                 else:
                     await update.message.reply_text(message, parse_mode='Markdown')
+        
+        # Handle Function 12 which returns dict with operators and clickable buttons
+        elif analysis["function_name"] == "aircraft_to_destination_search" and isinstance(response_text, dict):
+            message_text = response_text.get("message", "")
+            operators = response_text.get("operators", [])
+            
+            # Create operator buttons (Function 10 style, linking to Function 8)
+            if operators:
+                keyboard = []
+                for op in operators:
+                    callback_data = f"select_operator_func12_{op['name']}"
+                    button_text = f"📋 {op['name']} Details"
+                    keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+                
+                # Add additional buttons
+                keyboard.append([
+                    InlineKeyboardButton("🔍 New Search", callback_data="search_again"),
+                    InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+                ])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await send_large_message(update.message, message_text, reply_markup)
+            else:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
         else:
             # Standard message handling - split long messages (Telegram has 4096 char limit)
             if len(response_text) > 4000:
@@ -1268,12 +1512,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         callback_data = query.data
         
         if callback_data.startswith("select_operator_"):
-            # Handle both regular operator selection and geographic operator selection
+            # Handle regular, geographic, and Function 12 operator selections
             is_geographic_selection = callback_data.startswith("select_operator_geo_")
+            is_func12_selection = callback_data.startswith("select_operator_func12_")
             
             if is_geographic_selection:
                 # Geographic operator selection (Function 10) - preserve original results
                 operator_name = callback_data.replace("select_operator_geo_", "")
+            elif is_func12_selection:
+                # Function 12 operator selection - preserve original results
+                operator_name = callback_data.replace("select_operator_func12_", "")
             else:
                 # Regular operator selection (Function 8 search) - replace message
                 parts = callback_data.split("_", 3)
@@ -1289,8 +1537,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # Format and display results
             response_text = format_operator_details(results)
             
-            if is_geographic_selection:
-                # For Function 10: Send new message to preserve original results
+            if is_geographic_selection or is_func12_selection:
+                # For Function 10 and 12: Send new message to preserve original results
                 await query.message.reply_text(
                     text=response_text,
                     parse_mode='Markdown',
@@ -1388,6 +1636,21 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     "📌 **Function menu remains pinned above for easy switching**"
                 )
                 context.user_data['selected_function'] = 'get_operators_by_geographic_locations'
+                
+            elif func_id == "12":
+                # Send new message instead of editing the pinned menu
+                await query.message.reply_text(
+                    "✈️ **Aircraft-to-Destination Search Selected** ✅\n\n"
+                    "Find ALL operators that can fly specific aircraft types to your chosen destinations.\n\n"
+                    "**Examples:**\n"
+                    "• \"A330 B777 to China\" (multiple aircraft, country)\n"
+                    "• \"B747 to JFK LAX\" (one aircraft, multiple airports)\n"
+                    "• \"IL76 to Europe Asia\" (freighter to continents)\n\n"
+                    "💬 **Type your query now:**\n"
+                    "💡 **Format: [Aircraft Types] to [Destinations]**\n\n"
+                    "📌 **Function menu remains pinned above for easy switching**"
+                )
+                context.user_data['selected_function'] = 'aircraft_to_destination_search'
             
             await query.answer()
             
