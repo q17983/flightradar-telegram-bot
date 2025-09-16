@@ -97,46 +97,64 @@ serve(async (req: Request) => {
  * Get all available aircraft types from the database with statistics
  */
 async function getAvailableAircraftTypes(connection: any) {
-  console.log("Getting available aircraft types from database")
+  console.log("Getting aircraft types - using exact same pattern as working Function 8")
   
-  const aircraftTypesSql = `
-    SELECT 
-        type as aircraft_type,
-        COUNT(*) as aircraft_count,
-        COUNT(DISTINCT operator) as operator_count
-    FROM aircraft 
-    WHERE type IS NOT NULL 
-      AND type != '' 
-      AND type != 'Unknown'
-      AND operator IS NOT NULL
-    GROUP BY type
-    ORDER BY aircraft_count DESC;
-  `
-  
-  const result = await connection.queryObject(aircraftTypesSql)
-  
-  console.log(`Aircraft types query returned ${result.rows.length} rows`)
-  console.log("Raw query result:", result.rows.slice(0, 3)) // Show first 3 rows
-  
-  const aircraftTypes = result.rows.map(row => ({
-    aircraft_type: row.aircraft_type,
-    aircraft_count: Number(row.aircraft_count),
-    operator_count: Number(row.operator_count)
-  }))
-  
-  console.log(`Processed ${aircraftTypes.length} aircraft types:`, aircraftTypes.slice(0, 3))
-  
-  return new Response(
-    JSON.stringify({
-      aircraft_types: aircraftTypes,
-      total_types: aircraftTypes.length,
-      function_name: "aircraft_to_destination_search"
-    }),
-    { 
-      status: 200, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+  try {
+    // Use the EXACT same query pattern as Function 8 (which works perfectly)
+    const aircraftTypesSql = `
+      SELECT 
+          a.type as aircraft_type,
+          COUNT(*) as aircraft_count,
+          COUNT(DISTINCT a.operator) as operator_count
+      FROM aircraft a
+      WHERE a.operator IS NOT NULL
+      GROUP BY a.type
+      ORDER BY aircraft_count DESC;
+    `
+    
+    console.log("Executing aircraft types query...")
+    const result = await connection.queryObject(aircraftTypesSql)
+    console.log(`Query returned ${result.rows.length} rows`)
+    
+    if (result.rows.length > 0) {
+      console.log("First 5 aircraft types:", result.rows.slice(0, 5))
     }
-  )
+    
+    const aircraftTypes = result.rows.map(row => ({
+      aircraft_type: row.aircraft_type,
+      aircraft_count: Number(row.aircraft_count),
+      operator_count: Number(row.operator_count)
+    }))
+    
+    console.log(`Successfully processed ${aircraftTypes.length} aircraft types`)
+    
+    return new Response(
+      JSON.stringify({
+        aircraft_types: aircraftTypes,
+        total_types: aircraftTypes.length,
+        function_name: "aircraft_to_destination_search"
+      }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+    
+  } catch (error) {
+    console.error("Error in getAvailableAircraftTypes:", error)
+    return new Response(
+      JSON.stringify({
+        error: `Failed to get aircraft types: ${error.message}`,
+        aircraft_types: [],
+        total_types: 0,
+        function_name: "aircraft_to_destination_search"
+      }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
 }
 
 /**
@@ -219,15 +237,21 @@ async function searchOperatorsByAircraftAndDestinations(
   console.log(`Search query returned ${searchResult.rows.length} operators`)
   
   if (searchResult.rows.length === 0) {
+    console.log("No operators found for search criteria")
     return new Response(
       JSON.stringify({
-        error: `No operators found with aircraft types [${aircraftTypes.join(', ')}] serving destinations [${destinations.join(', ')}]`,
-        function_name: "aircraft_to_destination_search",
-        search_params: {
+        search_summary: {
           aircraft_types: aircraftTypes,
           destinations: destinations,
-          parsed_destinations: { airportCodes, countryPatterns, continentCodes }
-        }
+          total_operators: 0,
+          total_flights: 0,
+          total_destinations: 0,
+          period_start: startTime,
+          period_end: endTime
+        },
+        operators: [],
+        message: `❌ No operators found with aircraft types [${aircraftTypes.join(', ')}] serving destinations [${destinations.join(', ')}].\n\nTry different aircraft types or destinations.`,
+        function_name: "aircraft_to_destination_search"
       }),
       { 
         status: 200, 

@@ -79,6 +79,11 @@ FUNCTION_MAP = {
         "url": f"{SUPABASE_URL}/functions/v1/get-operators-by-geographic-locations",
         "params": ["first_location_type", "first_location_value", "second_location_type", "second_location_value", "start_time", "end_time"],
         "description": "Function 10: Find operators serving between countries/continents/airports"
+    },
+    "aircraft-to-destination-search": {
+        "url": f"{SUPABASE_URL}/functions/v1/aircraft-to-destination-search",
+        "params": ["mode", "aircraft_types", "destinations", "start_time", "end_time"],
+        "description": "Function 12: Find operators with specific aircraft types to destinations"
     }
 }
 
