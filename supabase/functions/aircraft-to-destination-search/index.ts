@@ -192,6 +192,15 @@ async function searchOperatorsByAircraftAndDestinations(
     ORDER BY total_flights DESC;  -- NO LIMIT - show ALL results
   `
   
+  console.log("Executing search with parameters:", {
+    aircraftTypes,
+    airportCodes: airportCodes.length > 0 ? airportCodes : null,
+    countryPatterns: countryPatterns.length > 0 ? countryPatterns : null,
+    continentCodes: continentCodes.length > 0 ? continentCodes : null,
+    startTime,
+    endTime
+  })
+
   const searchResult = await connection.queryObject(searchSql, [
     aircraftTypes,  // $1
     airportCodes.length > 0 ? airportCodes : null,  // $2  
@@ -200,6 +209,8 @@ async function searchOperatorsByAircraftAndDestinations(
     startTime,  // $5
     endTime     // $6
   ])
+  
+  console.log(`Search query returned ${searchResult.rows.length} operators`)
   
   if (searchResult.rows.length === 0) {
     return new Response(
@@ -305,7 +316,10 @@ function parseDestinations(destinations: string[]): {
     }
     // Otherwise treat as country name (with ILIKE pattern)
     else {
-      countryPatterns.push(`%${dest.trim()}%`)
+      // Capitalize first letter for better matching
+      const destName = dest.trim()
+      const capitalizedDest = destName.charAt(0).toUpperCase() + destName.slice(1).toLowerCase()
+      countryPatterns.push(`%${capitalizedDest}%`)
     }
   }
   

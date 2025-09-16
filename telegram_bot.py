@@ -1012,8 +1012,209 @@ async def send_large_message(message, text: str, reply_markup=None):
             part_with_indicator = part + f"\n\n*📄 Continued in next message... ({i+1}/{len(parts)})*"
             await message.reply_text(text=part_with_indicator, parse_mode='Markdown')
 
+async def start_aircraft_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start Function 12 by showing aircraft type selection."""
+    try:
+        # Get available aircraft types from database
+        await update.message.reply_text(
+            "⏳ **Loading available aircraft types from database...**",
+            parse_mode='Markdown'
+        )
+        
+        # Call Supabase function to get aircraft types
+        results = await call_supabase_function("aircraft-to-destination-search", {
+            "mode": "get_aircraft_types"
+        })
+        
+        if results.get("error"):
+            await update.message.reply_text(
+                f"❌ **Error loading aircraft types**\n\n{results['error']}\n\n"
+                "Falling back to known aircraft types...",
+                parse_mode='Markdown'
+            )
+            # Fallback to known types
+            aircraft_types = [
+                {"aircraft_type": "A330", "aircraft_count": 0, "operator_count": 0},
+                {"aircraft_type": "B747", "aircraft_count": 0, "operator_count": 0},
+                {"aircraft_type": "B757", "aircraft_count": 0, "operator_count": 0},
+                {"aircraft_type": "B767", "aircraft_count": 0, "operator_count": 0},
+                {"aircraft_type": "B777", "aircraft_count": 0, "operator_count": 0},
+                {"aircraft_type": "IL76", "aircraft_count": 0, "operator_count": 0}
+            ]
+        else:
+            aircraft_types = results.get("aircraft_types", [])
+        
+        # Create aircraft selection message and keyboard
+        message = "✈️ **FUNCTION 12: Aircraft-to-Destination Search**\n\n"
+        message += "**Step 1: Select Aircraft Types** (Multiple Selection)\n\n"
+        message += "Choose one or more aircraft types from your database:\n\n"
+        
+        # Show aircraft types with statistics
+        for i, aircraft in enumerate(aircraft_types[:12], 1):  # Show top 12
+            aircraft_type = aircraft.get("aircraft_type", "Unknown")
+            aircraft_count = aircraft.get("aircraft_count", 0)
+            operator_count = aircraft.get("operator_count", 0)
+            message += f"**{i}.** {aircraft_type} ({aircraft_count:,} aircraft, {operator_count} operators)\n"
+        
+        message += "\n📝 **Instructions:**\n"
+        message += "• Type aircraft codes separated by spaces\n"
+        message += "• Example: `A330 B777 IL76`\n"
+        message += "• Or type `ALL` to select all aircraft types\n\n"
+        message += "💬 **Enter your aircraft selection:**"
+        
+        # Set user state
+        context.user_data['func12_step'] = 'select_aircraft'
+        context.user_data['available_aircraft'] = [a.get("aircraft_type") for a in aircraft_types]
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error starting aircraft selection: {e}")
+        await update.message.reply_text(
+            "❌ **Error starting aircraft selection**\n\n"
+            "Please try again or use direct format: `B747 to China`",
+            parse_mode='Markdown'
+        )
+
+async def handle_aircraft_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, user_input: str):
+    """Handle aircraft type selection."""
+    try:
+        available_aircraft = context.user_data.get('available_aircraft', [])
+        user_input = user_input.strip().upper()
+        
+        if user_input == "ALL":
+            selected_aircraft = available_aircraft
+        else:
+            # Parse user input
+            input_types = user_input.split()
+            selected_aircraft = []
+            
+            for aircraft_type in input_types:
+                if aircraft_type in available_aircraft:
+                    selected_aircraft.append(aircraft_type)
+                else:
+                    await update.message.reply_text(
+                        f"❌ **Aircraft type '{aircraft_type}' not found**\n\n"
+                        f"Available types: {', '.join(available_aircraft[:10])}...\n\n"
+                        "Please try again with valid aircraft types.",
+                        parse_mode='Markdown'
+                    )
+                    return
+        
+        if not selected_aircraft:
+            await update.message.reply_text(
+                "❌ **No aircraft types selected**\n\n"
+                "Please select at least one aircraft type or type `ALL`.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Confirm selection and move to destinations
+        message = f"✅ **Aircraft Selected:** {', '.join(selected_aircraft)}\n\n"
+        message += "**Step 2: Enter Destinations**\n\n"
+        message += "Enter one or more destinations:\n\n"
+        message += "**Examples:**\n"
+        message += "• Airport codes: `JFK LAX LHR`\n"
+        message += "• Countries: `China Japan Germany`\n"
+        message += "• Continents: `Asia Europe`\n"
+        message += "• Mixed: `JFK China Europe`\n\n"
+        message += "💬 **Enter your destinations:**"
+        
+        # Update user state
+        context.user_data['func12_step'] = 'select_destinations'
+        context.user_data['selected_aircraft'] = selected_aircraft
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error handling aircraft selection: {e}")
+        await update.message.reply_text(
+            "❌ **Error processing aircraft selection**\n\nPlease try again.",
+            parse_mode='Markdown'
+        )
+
+async def handle_destination_input(update: Update, context: ContextTypes.DEFAULT_TYPE, user_input: str):
+    """Handle destination input and execute search."""
+    try:
+        selected_aircraft = context.user_data.get('selected_aircraft', [])
+        destinations = [dest.strip() for dest in user_input.replace(',', ' ').split() if dest.strip()]
+        
+        if not destinations:
+            await update.message.reply_text(
+                "❌ **No destinations entered**\n\n"
+                "Please enter at least one destination.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Clear user state
+        context.user_data.pop('func12_step', None)
+        context.user_data.pop('selected_aircraft', None)
+        context.user_data.pop('available_aircraft', None)
+        
+        # Execute search
+        await execute_aircraft_destination_search(update, context, selected_aircraft, destinations)
+        
+    except Exception as e:
+        logger.error(f"Error handling destination input: {e}")
+        await update.message.reply_text(
+            "❌ **Error processing destinations**\n\nPlease try again.",
+            parse_mode='Markdown'
+        )
+
+async def execute_aircraft_destination_search(update: Update, context: ContextTypes.DEFAULT_TYPE, aircraft_types: list[str], destinations: list[str]):
+    """Execute the actual aircraft-destination search."""
+    try:
+        # Show processing message
+        await update.message.reply_text(
+            f"🔍 **Searching operators with {', '.join(aircraft_types)} to {', '.join(destinations)}...**\n\n"
+            "⏳ Processing comprehensive database search...",
+            parse_mode='Markdown'
+        )
+        
+        # Call Supabase Function 12
+        results = await call_supabase_function("aircraft-to-destination-search", {
+            "mode": "search",
+            "aircraft_types": aircraft_types,
+            "destinations": destinations,
+            "start_time": "2024-04-01",
+            "end_time": "2025-05-31"
+        })
+        
+        # Format and send results
+        response_data = format_aircraft_destination_results(results, aircraft_types, destinations)
+        
+        if response_data["operators"]:
+            # Create operator buttons (Function 10 style)
+            keyboard = []
+            for op in response_data["operators"][:20]:  # Top 20 operators for buttons
+                callback_data = f"select_operator_func12_{op['name']}"
+                button_text = f"📋 {op['name']} Details"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+            
+            # Add additional buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 New Search", callback_data="search_again"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await send_large_message(update.message, response_data["message"], reply_markup)
+        else:
+            await update.message.reply_text(response_data["message"], parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Error in aircraft-destination search execution: {e}")
+        await update.message.reply_text(
+            "❌ **Error executing search**\n\n"
+            f"Aircraft: {', '.join(aircraft_types)}\n"
+            f"Destinations: {', '.join(destinations)}\n\n"
+            "Please try again or contact support.",
+            parse_mode='Markdown'
+        )
+
 async def handle_aircraft_destination_search(update: Update, context: ContextTypes.DEFAULT_TYPE, user_query: str):
-    """Handle Function 12: Aircraft-to-Destination Search."""
+    """Handle Function 12: Aircraft-to-Destination Search (Legacy direct query)."""
     try:
         # Parse the query to extract aircraft types and destinations
         aircraft_types, destinations = parse_aircraft_destination_query(user_query)
@@ -1314,8 +1515,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     return
             elif selected_function == 'aircraft_to_destination_search':
                 # Handle Function 12: Aircraft-to-Destination Search
-                await handle_aircraft_destination_search(update, context, user_query)
-                return
+                # Check if user is in aircraft selection mode
+                if context.user_data.get('func12_step') == 'select_aircraft':
+                    await handle_aircraft_selection(update, context, user_query)
+                    return
+                elif context.user_data.get('func12_step') == 'select_destinations':
+                    await handle_destination_input(update, context, user_query)
+                    return
+                else:
+                    # Start with aircraft selection
+                    await start_aircraft_selection(update, context)
+                    return
             else:
                 # Create analysis with forced function
                 if selected_function == 'get_operators_by_geographic_locations':
