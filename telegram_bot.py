@@ -963,6 +963,44 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.error(f"❌ Failed to pin message: {e}")
         # Continue even if pinning fails
 
+async def send_large_message(message, text: str, reply_markup=None):
+    """Split and send large messages that exceed Telegram's 4096 character limit."""
+    MAX_MESSAGE_LENGTH = 4000  # Leave some buffer for safety
+    
+    if len(text) <= MAX_MESSAGE_LENGTH:
+        # Message is small enough, send normally
+        await message.reply_text(text=text, parse_mode='Markdown', reply_markup=reply_markup)
+        return
+    
+    # Split the message at natural break points
+    parts = []
+    current_part = ""
+    
+    lines = text.split('\n')
+    
+    for line in lines:
+        # If adding this line would exceed the limit, save current part and start new one
+        if len(current_part) + len(line) + 1 > MAX_MESSAGE_LENGTH:
+            if current_part:
+                parts.append(current_part.strip())
+                current_part = ""
+        
+        current_part += line + '\n'
+    
+    # Add the last part
+    if current_part:
+        parts.append(current_part.strip())
+    
+    # Send all parts
+    for i, part in enumerate(parts):
+        if i == len(parts) - 1:
+            # Last message gets the reply markup (buttons)
+            await message.reply_text(text=part, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            # Other messages just get the text with a "continued" indicator
+            part_with_indicator = part + f"\n\n*📄 Continued in next message... ({i+1}/{len(parts)})*"
+            await message.reply_text(text=part_with_indicator, parse_mode='Markdown')
+
 async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                   operator_name: str, geography_input: str, filter_type: str) -> None:
     """Handle geographic filtering for Function 8."""
@@ -1261,12 +1299,19 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 # Acknowledge the button click
                 await query.answer("✅ Operator details loaded!")
             else:
-                # For Function 8: Edit the message to show full details
-                await query.edit_message_text(
-                    text=response_text,
-                    parse_mode='Markdown',
-                    reply_markup=create_details_keyboard(operator_name)
-                )
+                # For Function 8: Handle large messages by splitting if needed
+                try:
+                    await query.edit_message_text(
+                        text=response_text,
+                        parse_mode='Markdown',
+                        reply_markup=create_details_keyboard(operator_name)
+                    )
+                except Exception as e:
+                    if "Message_too_long" in str(e) or "Bad Request" in str(e):
+                        # Split large message into multiple parts
+                        await send_large_message(query.message, response_text, create_details_keyboard(operator_name))
+                    else:
+                        raise e
                 await query.answer()
             
         elif callback_data == "search_again":
