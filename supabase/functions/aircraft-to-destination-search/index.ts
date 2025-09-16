@@ -105,12 +105,18 @@ async function getAvailableAircraftTypes(connection: any) {
         COUNT(*) as aircraft_count,
         COUNT(DISTINCT operator) as operator_count
     FROM aircraft 
-    WHERE type IS NOT NULL AND type != ''
+    WHERE type IS NOT NULL 
+      AND type != '' 
+      AND type != 'Unknown'
+      AND operator IS NOT NULL
     GROUP BY type
     ORDER BY aircraft_count DESC;
   `
   
   const result = await connection.queryObject(aircraftTypesSql)
+  
+  console.log(`Aircraft types query returned ${result.rows.length} rows`)
+  console.log("Raw query result:", result.rows.slice(0, 3)) // Show first 3 rows
   
   const aircraftTypes = result.rows.map(row => ({
     aircraft_type: row.aircraft_type,
@@ -118,7 +124,7 @@ async function getAvailableAircraftTypes(connection: any) {
     operator_count: Number(row.operator_count)
   }))
   
-  console.log(`Found ${aircraftTypes.length} aircraft types in database`)
+  console.log(`Processed ${aircraftTypes.length} aircraft types:`, aircraftTypes.slice(0, 3))
   
   return new Response(
     JSON.stringify({

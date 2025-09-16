@@ -1012,6 +1012,17 @@ async def send_large_message(message, text: str, reply_markup=None):
             part_with_indicator = part + f"\n\n*📄 Continued in next message... ({i+1}/{len(parts)})*"
             await message.reply_text(text=part_with_indicator, parse_mode='Markdown')
 
+async def start_aircraft_selection_from_callback(query, context: ContextTypes.DEFAULT_TYPE):
+    """Start Function 12 from callback query."""
+    # Create a mock update object for the existing function
+    class MockUpdate:
+        def __init__(self, query):
+            self.callback_query = query
+            self.message = query.message
+    
+    mock_update = MockUpdate(query)
+    await start_aircraft_selection(mock_update, context)
+
 async def start_aircraft_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start Function 12 by showing aircraft type selection with clickable buttons."""
     try:
@@ -1939,19 +1950,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 context.user_data['selected_function'] = 'get_operators_by_geographic_locations'
                 
             elif func_id == "12":
-                # Send new message instead of editing the pinned menu
+                # Start Function 12 immediately with aircraft selection
+                context.user_data['selected_function'] = 'aircraft_to_destination_search'
+                
+                # Send confirmation message
                 await query.message.reply_text(
                     "✈️ **Aircraft-to-Destination Search Selected** ✅\n\n"
-                    "Find ALL operators that can fly specific aircraft types to your chosen destinations.\n\n"
-                    "**Examples:**\n"
-                    "• \"A330 B777 to China\" (multiple aircraft, country)\n"
-                    "• \"B747 to JFK LAX\" (one aircraft, multiple airports)\n"
-                    "• \"IL76 to Europe Asia\" (freighter to continents)\n\n"
-                    "💬 **Type your query now:**\n"
-                    "💡 **Format: [Aircraft Types] to [Destinations]**\n\n"
-                    "📌 **Function menu remains pinned above for easy switching**"
+                    "Starting aircraft selection menu...",
+                    parse_mode='Markdown'
                 )
-                context.user_data['selected_function'] = 'aircraft_to_destination_search'
+                
+                # Immediately start aircraft selection
+                await start_aircraft_selection_from_callback(query, context)
             
             await query.answer()
             
