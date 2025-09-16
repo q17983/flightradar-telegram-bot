@@ -1013,7 +1013,7 @@ async def send_large_message(message, text: str, reply_markup=None):
             await message.reply_text(text=part_with_indicator, parse_mode='Markdown')
 
 async def start_aircraft_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start Function 12 by showing aircraft type selection."""
+    """Start Function 12 by showing aircraft type selection with clickable buttons."""
     try:
         # Get available aircraft types from database
         await update.message.reply_text(
@@ -1044,92 +1044,131 @@ async def start_aircraft_selection(update: Update, context: ContextTypes.DEFAULT
         else:
             aircraft_types = results.get("aircraft_types", [])
         
-        # Create aircraft selection message and keyboard
-        message = "✈️ **FUNCTION 12: Aircraft-to-Destination Search**\n\n"
-        message += "**Step 1: Select Aircraft Types** (Multiple Selection)\n\n"
-        message += "Choose one or more aircraft types from your database:\n\n"
-        
-        # Show aircraft types with statistics
-        for i, aircraft in enumerate(aircraft_types[:12], 1):  # Show top 12
-            aircraft_type = aircraft.get("aircraft_type", "Unknown")
-            aircraft_count = aircraft.get("aircraft_count", 0)
-            operator_count = aircraft.get("operator_count", 0)
-            message += f"**{i}.** {aircraft_type} ({aircraft_count:,} aircraft, {operator_count} operators)\n"
-        
-        message += "\n📝 **Instructions:**\n"
-        message += "• Type aircraft codes separated by spaces\n"
-        message += "• Example: `A330 B777 IL76`\n"
-        message += "• Or type `ALL` to select all aircraft types\n\n"
-        message += "💬 **Enter your aircraft selection:**"
-        
-        # Set user state
+        # Initialize selection state
         context.user_data['func12_step'] = 'select_aircraft'
-        context.user_data['available_aircraft'] = [a.get("aircraft_type") for a in aircraft_types]
+        context.user_data['available_aircraft'] = aircraft_types
+        context.user_data['selected_aircraft'] = []
         
-        await update.message.reply_text(message, parse_mode='Markdown')
+        # Create aircraft selection message and keyboard
+        await show_aircraft_selection_menu(update, context, aircraft_types)
         
     except Exception as e:
         logger.error(f"Error starting aircraft selection: {e}")
         await update.message.reply_text(
             "❌ **Error starting aircraft selection**\n\n"
-            "Please try again or use direct format: `B747 to China`",
+            "Please try again later.",
             parse_mode='Markdown'
         )
 
-async def handle_aircraft_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, user_input: str):
-    """Handle aircraft type selection."""
-    try:
-        available_aircraft = context.user_data.get('available_aircraft', [])
-        user_input = user_input.strip().upper()
+async def show_aircraft_selection_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, aircraft_types: list):
+    """Show aircraft selection menu with clickable buttons."""
+    selected_aircraft = context.user_data.get('selected_aircraft', [])
+    
+    # Create message
+    message = "✈️ **FUNCTION 12: Aircraft-to-Destination Search**\n\n"
+    message += "**Step 1: Select Aircraft Types** (Multiple Selection)\n\n"
+    
+    if selected_aircraft:
+        message += f"**Currently Selected:** {', '.join(selected_aircraft)}\n\n"
+    
+    message += "Click aircraft types to select/deselect:\n\n"
+    
+    # Show aircraft types with statistics
+    for i, aircraft in enumerate(aircraft_types[:12], 1):  # Show top 12
+        aircraft_type = aircraft.get("aircraft_type", "Unknown")
+        aircraft_count = aircraft.get("aircraft_count", 0)
+        operator_count = aircraft.get("operator_count", 0)
         
-        if user_input == "ALL":
-            selected_aircraft = available_aircraft
-        else:
-            # Parse user input
-            input_types = user_input.split()
-            selected_aircraft = []
-            
-            for aircraft_type in input_types:
-                if aircraft_type in available_aircraft:
-                    selected_aircraft.append(aircraft_type)
+        # Mark selected aircraft
+        status = "✅" if aircraft_type in selected_aircraft else "☐"
+        message += f"{status} **{aircraft_type}** ({aircraft_count:,} aircraft, {operator_count} operators)\n"
+    
+    message += "\n👆 **Click buttons below to select aircraft types**"
+    
+    # Create keyboard with aircraft buttons
+    keyboard = []
+    
+    # Aircraft selection buttons (2 per row)
+    for i in range(0, min(len(aircraft_types), 12), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(aircraft_types):
+                aircraft = aircraft_types[i + j]
+                aircraft_type = aircraft.get("aircraft_type", "Unknown")
+                
+                # Show selection status in button
+                if aircraft_type in selected_aircraft:
+                    button_text = f"✅ {aircraft_type}"
                 else:
-                    await update.message.reply_text(
-                        f"❌ **Aircraft type '{aircraft_type}' not found**\n\n"
-                        f"Available types: {', '.join(available_aircraft[:10])}...\n\n"
-                        "Please try again with valid aircraft types.",
-                        parse_mode='Markdown'
-                    )
-                    return
+                    button_text = f"☐ {aircraft_type}"
+                
+                callback_data = f"func12_aircraft_{aircraft_type}"
+                row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
         
-        if not selected_aircraft:
-            await update.message.reply_text(
-                "❌ **No aircraft types selected**\n\n"
-                "Please select at least one aircraft type or type `ALL`.",
-                parse_mode='Markdown'
-            )
-            return
-        
-        # Confirm selection and move to destinations
+        if row:  # Only add non-empty rows
+            keyboard.append(row)
+    
+    # Control buttons
+    control_buttons = []
+    if len(aircraft_types) > 0:
+        control_buttons.append(InlineKeyboardButton("☑️ Select All", callback_data="func12_select_all"))
+        control_buttons.append(InlineKeyboardButton("🗑️ Clear All", callback_data="func12_clear_all"))
+    
+    if control_buttons:
+        keyboard.append(control_buttons)
+    
+    # Action buttons
+    action_buttons = []
+    if selected_aircraft:
+        action_buttons.append(InlineKeyboardButton("➡️ Continue to Destinations", callback_data="func12_continue"))
+    action_buttons.append(InlineKeyboardButton("❌ Cancel", callback_data="func12_cancel"))
+    
+    if action_buttons:
+        keyboard.append(action_buttons)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send or edit message
+    if hasattr(update, 'callback_query') and update.callback_query:
+        await update.callback_query.edit_message_text(
+            text=message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            text=message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+async def show_destination_input_step(update: Update, context: ContextTypes.DEFAULT_TYPE, selected_aircraft: list):
+    """Show destination input step after aircraft selection."""
+    try:
         message = f"✅ **Aircraft Selected:** {', '.join(selected_aircraft)}\n\n"
         message += "**Step 2: Enter Destinations**\n\n"
-        message += "Enter one or more destinations:\n\n"
+        message += "Enter one or more destinations separated by spaces:\n\n"
         message += "**Examples:**\n"
         message += "• Airport codes: `JFK LAX LHR`\n"
         message += "• Countries: `China Japan Germany`\n"
         message += "• Continents: `Asia Europe`\n"
         message += "• Mixed: `JFK China Europe`\n\n"
-        message += "💬 **Enter your destinations:**"
+        message += "💬 **Type your destinations and press Enter:**"
         
         # Update user state
         context.user_data['func12_step'] = 'select_destinations'
         context.user_data['selected_aircraft'] = selected_aircraft
         
-        await update.message.reply_text(message, parse_mode='Markdown')
+        # Send new message (don't edit the aircraft selection message)
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.reply_text(message, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(message, parse_mode='Markdown')
         
     except Exception as e:
-        logger.error(f"Error handling aircraft selection: {e}")
+        logger.error(f"Error showing destination input: {e}")
         await update.message.reply_text(
-            "❌ **Error processing aircraft selection**\n\nPlease try again.",
+            "❌ **Error proceeding to destinations**\n\nPlease try again.",
             parse_mode='Markdown'
         )
 
@@ -1515,15 +1554,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     return
             elif selected_function == 'aircraft_to_destination_search':
                 # Handle Function 12: Aircraft-to-Destination Search
-                # Check if user is in aircraft selection mode
-                if context.user_data.get('func12_step') == 'select_aircraft':
-                    await handle_aircraft_selection(update, context, user_query)
-                    return
-                elif context.user_data.get('func12_step') == 'select_destinations':
+                # Check if user is in destination input mode
+                if context.user_data.get('func12_step') == 'select_destinations':
                     await handle_destination_input(update, context, user_query)
                     return
                 else:
-                    # Start with aircraft selection
+                    # Start with aircraft selection (button-based)
                     await start_aircraft_selection(update, context)
                     return
             else:
@@ -1771,6 +1807,61 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     else:
                         raise e
                 await query.answer()
+            
+        # Function 12 Aircraft Selection Handlers
+        elif callback_data.startswith("func12_aircraft_"):
+            # Handle individual aircraft selection toggle
+            aircraft_type = callback_data.replace("func12_aircraft_", "")
+            selected_aircraft = context.user_data.get('selected_aircraft', [])
+            
+            if aircraft_type in selected_aircraft:
+                selected_aircraft.remove(aircraft_type)
+            else:
+                selected_aircraft.append(aircraft_type)
+            
+            context.user_data['selected_aircraft'] = selected_aircraft
+            
+            # Update the menu
+            available_aircraft = context.user_data.get('available_aircraft', [])
+            await show_aircraft_selection_menu(update, context, available_aircraft)
+            await query.answer()
+            
+        elif callback_data == "func12_select_all":
+            # Select all aircraft types
+            available_aircraft = context.user_data.get('available_aircraft', [])
+            all_types = [a.get('aircraft_type') for a in available_aircraft]
+            context.user_data['selected_aircraft'] = all_types
+            
+            await show_aircraft_selection_menu(update, context, available_aircraft)
+            await query.answer("✅ All aircraft selected!")
+            
+        elif callback_data == "func12_clear_all":
+            # Clear all selections
+            context.user_data['selected_aircraft'] = []
+            available_aircraft = context.user_data.get('available_aircraft', [])
+            
+            await show_aircraft_selection_menu(update, context, available_aircraft)
+            await query.answer("🗑️ All selections cleared!")
+            
+        elif callback_data == "func12_continue":
+            # Continue to destination selection
+            selected_aircraft = context.user_data.get('selected_aircraft', [])
+            if not selected_aircraft:
+                await query.answer("❌ Please select at least one aircraft type!")
+                return
+            
+            # Move to destination input step
+            await show_destination_input_step(update, context, selected_aircraft)
+            await query.answer()
+            
+        elif callback_data == "func12_cancel":
+            # Cancel Function 12
+            context.user_data.pop('func12_step', None)
+            context.user_data.pop('selected_aircraft', None)
+            context.user_data.pop('available_aircraft', None)
+            
+            await query.edit_message_text("❌ Aircraft-to-Destination search cancelled.")
+            await query.answer()
             
         elif callback_data == "search_again":
             await query.edit_message_text("🔍 Enter operator name, IATA, or ICAO code to search:")
