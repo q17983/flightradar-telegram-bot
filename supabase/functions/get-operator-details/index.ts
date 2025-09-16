@@ -35,7 +35,9 @@ serve(async (req: Request) => {
       search_query, 
       operator_selection, 
       start_time = "2024-01-01", 
-      end_time = "2024-12-31" 
+      end_time = "2024-12-31",
+      geographic_filter,  // ENHANCED: Geographic filtering
+      filter_type         // ENHANCED: "country" or "continent"
     } = await req.json()
 
     // Basic validation
@@ -63,8 +65,14 @@ serve(async (req: Request) => {
     const testResult = await connection.queryObject("SELECT 1 as test")
     console.log("Function 8: Database test query successful:", testResult.rows)
 
-    // 6. Handle two modes: search or get details
-    if (operator_selection) {
+    // 6. ENHANCED: Handle three modes: search, get details, or geographic filtering
+    console.log("Function 8 mode check - operator_selection:", operator_selection, "search_query:", search_query, "geographic_filter:", geographic_filter)
+    
+    if (operator_selection && geographic_filter) {
+      // Mode 3: ENHANCED - Geographic filtering for operator destinations
+      console.log("Function 8: Getting geographic destinations for:", operator_selection, "in", geographic_filter)
+      return await getOperatorGeographicDestinations(connection, operator_selection, geographic_filter, filter_type, start_time, end_time)
+    } else if (operator_selection) {
       // Mode 2: Get full operator details (after selection)
       return await getOperatorDetails(connection, operator_selection, start_time, end_time)
     } else {
@@ -342,6 +350,99 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
   )
 }
 
+/**
+ * ENHANCED: Get operator destinations filtered by geography (country/continent)
+ */
+async function getOperatorGeographicDestinations(
+  connection: any, 
+  operatorSelection: string, 
+  geographicFilter: string, 
+  filterType: string,
+  startTime: string, 
+  endTime: string
+) {
+  console.log(`Getting geographic destinations for ${operatorSelection} in ${geographicFilter} (${filterType})`)
+
+  // Geographic filtering query with airports_geography integration
+  const geographicSql = `
+    SELECT 
+        m.destination_code,
+        ag.airport_name,
+        ag.country_name,
+        ag.continent,
+        COUNT(*) as total_flights,
+        array_agg(DISTINCT a.type ORDER BY a.type) as aircraft_types_used,
+        ROUND(COUNT(*) / 12.0, 1) as avg_flights_per_month
+    FROM movements m
+    JOIN aircraft a ON m.registration = a.registration
+    JOIN airports_geography ag ON m.destination_code = ag.iata_code
+    WHERE a.operator = $1
+      AND m.scheduled_departure >= $2
+      AND m.scheduled_departure <= $3
+      AND (
+        CASE 
+          WHEN $4 = 'country' THEN ag.country_name ILIKE $5
+          WHEN $4 = 'continent' THEN ag.continent ILIKE $5
+          ELSE false
+        END
+      )
+    GROUP BY m.destination_code, ag.airport_name, ag.country_name, ag.continent
+    ORDER BY total_flights DESC
+    LIMIT 30;
+  `
+
+  // Execute the geographic query
+  const geographicResult = await connection.queryObject(geographicSql, [
+    operatorSelection,  // $1
+    startTime,          // $2
+    endTime,            // $3
+    filterType,         // $4
+    `%${geographicFilter}%`  // $5 - Use LIKE pattern for flexible matching
+  ]);
+
+  console.log(`Geographic query returned ${geographicResult.rows?.length || 0} destinations`)
+
+  if (!geographicResult.rows || geographicResult.rows.length === 0) {
+    return new Response(
+      JSON.stringify({
+        error: `No destinations found for ${operatorSelection} in ${geographicFilter}. Try alternative spelling or check if operator serves this region.`,
+        operator: operatorSelection,
+        geographic_filter: geographicFilter,
+        filter_type: filterType
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+    )
+  }
+
+  // Process the geographic results
+  const geographicDestinations = geographicResult.rows.map(row => ({
+    destination_code: row.destination_code,
+    airport_name: row.airport_name,
+    country_name: row.country_name,
+    continent: row.continent,
+    total_flights: Number(row.total_flights),
+    aircraft_types_used: row.aircraft_types_used || [],
+    avg_flights_per_month: Number(row.avg_flights_per_month)
+  }));
+
+  console.log(`Successfully processed ${geographicDestinations.length} geographic destinations`)
+
+  return new Response(
+    JSON.stringify({
+      result_type: "geographic_destinations",
+      operator: operatorSelection,
+      geographic_filter: geographicFilter,
+      filter_type: filterType,
+      period_start: startTime,
+      period_end: endTime,
+      total_destinations: geographicDestinations.length,
+      total_flights: geographicDestinations.reduce((sum, dest) => sum + dest.total_flights, 0),
+      geographic_destinations: geographicDestinations
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
 /* Function 8 Testing:
   
   // Search mode
@@ -355,4 +456,10 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
     --header 'Authorization: Bearer [TOKEN]' \
     --header 'Content-Type: application/json' \
     --data '{"operator_selection":"FedEx","start_time":"2024-01-01","end_time":"2024-12-31"}'
+
+  // ENHANCED: Geographic filtering mode
+  curl -i --location --request POST 'http://localhost:54321/functions/v1/get-operator-details' \
+    --header 'Authorization: Bearer [TOKEN]' \
+    --header 'Content-Type: application/json' \
+    --data '{"operator_selection":"Qatar Airways","geographic_filter":"China","filter_type":"country","start_time":"2024-01-01","end_time":"2024-12-31"}'
 */
