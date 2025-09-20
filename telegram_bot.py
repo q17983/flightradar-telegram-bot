@@ -1584,12 +1584,16 @@ async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT
         # Format the geographic results
         response_text = format_geographic_destinations(results, operator_name, geography_input, filter_type)
         
-        # Send results with back button using send_large_message to handle long messages
+        # Send results with back button
         keyboard = [[InlineKeyboardButton("🔙 Back to Full Details", 
                                         callback_data=f"back_to_operator_{operator_name.replace(' ', '_')}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await send_large_message(update.message, response_text, reply_markup)
+        await update.message.reply_text(
+            text=response_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
         
     except Exception as e:
         logger.error(f"Error in geographic filter: {e}")
