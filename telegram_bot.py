@@ -1888,11 +1888,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             
             if is_geographic_selection or is_func12_selection:
                 # For Function 10 and 12: Send new message to preserve original results
-                await query.message.reply_text(
-                    text=response_text,
-                    parse_mode='Markdown',
-                    reply_markup=create_details_keyboard(operator_name)
-                )
+                # Use send_large_message to handle long operator profiles
+                await send_large_message(query.message, response_text, create_details_keyboard(operator_name))
                 # Acknowledge the button click
                 await query.answer("✅ Operator details loaded!")
             else:
