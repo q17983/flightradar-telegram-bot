@@ -2223,7 +2223,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message, response_text)
+                    
+                    # Send results as new message (not via callback)
+                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
+                        # For Functions 9 & 10, handle list responses
+                        if isinstance(response_text, list):
+                            for message in response_text:
+                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
+                        else:
+                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
+                    else:
+                        # For other functions, send as single message
+                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
@@ -2254,7 +2265,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message, response_text)
+                    
+                    # Send results as new message (not via callback)
+                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
+                        # For Functions 9 & 10, handle list responses
+                        if isinstance(response_text, list):
+                            for message in response_text:
+                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
+                        else:
+                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
+                    else:
+                        # For other functions, send as single message
+                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
@@ -2282,7 +2304,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message, response_text)
+                    
+                    # Send results as new message (not via callback)
+                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
+                        # For Functions 9 & 10, handle list responses
+                        if isinstance(response_text, list):
+                            for message in response_text:
+                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
+                        else:
+                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
+                    else:
+                        # For other functions, send as single message
+                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
