@@ -2290,23 +2290,27 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     analysis = await analyze_query_with_openai(pending_query)
                 
                 if analysis:
-                    analysis['function_name'] = new_function
+                    # Set the new function selection
                     context.user_data['selected_function'] = new_function
                     
-                    results = await call_supabase_function(
-                        analysis["function_name"], 
-                        analysis["parameters"]
-                    )
+                    # Create a mock update object to reuse existing message handling
+                    class MockUpdate:
+                        def __init__(self, query_obj, text):
+                            self.message = query_obj.message
+                            self.message.text = text
+                            self.effective_chat = query_obj.message.chat
                     
-                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    # Create mock update and reuse existing message handling logic
+                    mock_update = MockUpdate(query, pending_query)
                     
-                    # Send results using helper function with error handling
-                    await send_callback_results(context, query.message.chat_id, response_text, analysis["function_name"])
-                    
-                    # Clean up
+                    # Clean up pending data first
                     context.user_data.pop('pending_analysis', None)
                     context.user_data.pop('pending_query', None)
                     
+                    # Use the existing message handler (this is the proven working pattern!)
+                    await handle_message(mock_update, context)
+                    
+                    # Update the original mismatch message
                     await query.edit_message_text("✅ **Switched and executed successfully!**")
                 else:
                     await query.edit_message_text("❌ **Error re-analyzing query**")
@@ -2339,31 +2343,27 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     analysis = await analyze_query_with_openai(pending_query)
                 
                 if analysis:
-                    analysis['function_name'] = selected_function
+                    # Set the function selection
+                    context.user_data['selected_function'] = selected_function
                     
-                    results = await call_supabase_function(
-                        analysis["function_name"], 
-                        analysis["parameters"]
-                    )
+                    # Create a mock update object to reuse existing message handling
+                    class MockUpdate:
+                        def __init__(self, query_obj, text):
+                            self.message = query_obj.message
+                            self.message.text = text
+                            self.effective_chat = query_obj.message.chat
                     
-                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    # Create mock update and reuse existing message handling logic
+                    mock_update = MockUpdate(query, pending_query)
                     
-                    # Send results as new message (not via callback)
-                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
-                        # For Functions 9 & 10, handle list responses
-                        if isinstance(response_text, list):
-                            for message in response_text:
-                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
-                        else:
-                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
-                    else:
-                        # For other functions, send as single message
-                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
-                    
-                    # Clean up
+                    # Clean up pending data first
                     context.user_data.pop('pending_analysis', None)
                     context.user_data.pop('pending_query', None)
                     
+                    # Use the existing message handler (proven working pattern!)
+                    await handle_message(mock_update, context)
+                    
+                    # Update the original mismatch message
                     await query.edit_message_text("✅ **Executed with your selected function!**")
                 else:
                     await query.edit_message_text("❌ **Error processing with selected function**")
@@ -2386,29 +2386,27 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 analysis = await analyze_query_with_openai(pending_query)
                 
                 if analysis:
-                    results = await call_supabase_function(
-                        analysis["function_name"], 
-                        analysis["parameters"]
-                    )
+                    # Clear selection for auto-detection
+                    context.user_data.pop('selected_function', None)
                     
-                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    # Create a mock update object to reuse existing message handling
+                    class MockUpdate:
+                        def __init__(self, query_obj, text):
+                            self.message = query_obj.message
+                            self.message.text = text
+                            self.effective_chat = query_obj.message.chat
                     
-                    # Send results as new message (not via callback)
-                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
-                        # For Functions 9 & 10, handle list responses
-                        if isinstance(response_text, list):
-                            for message in response_text:
-                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
-                        else:
-                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
-                    else:
-                        # For other functions, send as single message
-                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
+                    # Create mock update and reuse existing message handling logic
+                    mock_update = MockUpdate(query, pending_query)
                     
-                    # Clean up
+                    # Clean up pending data first
                     context.user_data.pop('pending_analysis', None)
                     context.user_data.pop('pending_query', None)
                     
+                    # Use the existing message handler (proven working pattern!)
+                    await handle_message(mock_update, context)
+                    
+                    # Update the original mismatch message
                     await query.edit_message_text("✅ **Selection cleared - using auto-detection!**")
                 else:
                     await query.edit_message_text("❌ **Error with auto-detection**")
