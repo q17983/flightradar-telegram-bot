@@ -1,0 +1,75 @@
+# FlightRadar Scraper - Cursor IDE Project Rules
+
+## 🎯 Core Development Principles
+
+### Directory & Environment
+- ALWAYS work from `/Users/sai/Flightradar crawling/` for bot operations
+- Use `flightradar_scraper/` subfolder only for scraper-related files
+- Environment variables in `.env` file (never commit)
+- Railway dashboard for production environment variables
+
+### Security (CRITICAL)
+- NEVER commit API keys, tokens, or secrets to git
+- ALWAYS scan for API keys before commits: `grep -r "sk-" . --exclude-dir=.git`
+- Protect `.env`, `.specstory/`, and any files with secrets in .gitignore
+- If API key leaked: immediately create new key, update all environments
+
+### Function Development Pattern
+- Copy structure from working functions (1, 8, 10, 12)
+- Use EXACT imports: `serve` from std@0.177.0, `Pool` from postgres@v0.17.0
+- ALWAYS include CORS handling and connection cleanup in finally block
+- Convert PostgreSQL BigInt to Number: `Number(value)` before arithmetic operations
+
+### Database Query Standards
+- Include `LIMIT 10000` to prevent timeouts
+- Filter empty data: `AND a.operator != ''`
+- Use group filtering: `HAVING COUNT(*) >= 1`
+- Standard freighter detection pattern across all functions
+
+### Testing & Deployment Safety
+- Test locally first: `npx supabase functions serve [function-name]`
+- Kill local bot instances before deployment: `pkill -f "python telegram_bot.py"`
+- Create git checkpoints before major changes
+- Make ONE change at a time with immediate testing
+- Deploy Supabase functions first, then Telegram bot via git push
+
+### Error Prevention
+- Never run multiple bot instances simultaneously
+- Always use correct table names: `movements` JOIN `aircraft`
+- Implement message splitting for large Telegram responses (4096 char limit)
+- Handle BigInt conversions in JavaScript/TypeScript
+- Don't assume JWT warnings mean broken functionality
+
+### Proven Success Patterns
+- Follow exact structure from Functions 1, 8, 10, 12
+- Use consistent JSON response format with CORS headers
+- Implement proper error handling with status codes
+- Add result formatting functions for new data structures
+- Include comprehensive parameter validation
+
+## 🚨 Red Flags - STOP Development
+- Existing functions stop working
+- API keys become inaccessible  
+- Database connections fail
+- Multiple errors with unclear causes
+
+## ✅ Green Lights - Continue
+- All tests passing
+- Clear progress on current phase
+- No regressions detected
+- Understanding of next steps
+
+## Quick Commands Reference
+```bash
+# Security check
+grep -r "sk-" . --exclude-dir=.git --exclude-dir=venv
+
+# Local function test
+npx supabase functions serve [function-name] --env-file supabase/.env.local
+
+# Safe deployment
+pkill -f "python telegram_bot.py" && git push origin main
+
+# Emergency restore
+git reset --hard <checkpoint_hash> && git push --force origin main
+```
