@@ -40,3 +40,15 @@ logs/
 # Backup files
 *.backup
 *.bakflightradar_scraper/.specstory/
+
+# Conversation histories (may contain API keys)
+.specstory/
+**/.specstory/
+*.history
+*.conversation
+
+# Any file that might contain secrets
+*.secret
+*.key
+.secrets/
+config/secrets.json
