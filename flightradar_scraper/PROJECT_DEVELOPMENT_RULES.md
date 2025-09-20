@@ -256,9 +256,15 @@ def format_function_X_results(data):
     # Handle Telegram 4096 character limit
     
 # 2. Add advanced UI features one by one
-# 3. Test each feature individually
+# 3. Deploy directly to Railway for user testing (skip local bot testing)
 # 4. Create final checkpoint when complete
 ```
+
+### **Testing Protocol:**
+- ✅ **Supabase Functions:** Test locally with `npx supabase functions serve`
+- ✅ **Database Queries:** Test with curl or direct database connection
+- ✅ **Telegram Bot:** Deploy directly to Railway - user will test functionality
+- ❌ **Skip Local Bot Testing:** No need to run telegram_bot.py locally for testing
 
 ---
 

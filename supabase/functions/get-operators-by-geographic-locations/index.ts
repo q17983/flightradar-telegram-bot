@@ -145,6 +145,7 @@ serve(async (req: Request) => {
           INNER JOIN location_airports la ON m.destination_code = la.iata_code
           WHERE m.scheduled_departure >= $1
             AND m.scheduled_departure <= $2
+            AND m.destination_code IS NOT NULL  -- Ensure clean data
         )
         SELECT
           a.operator,
@@ -160,16 +161,24 @@ serve(async (req: Request) => {
           COUNT(*) as frequency,
           CASE 
             WHEN (
+              -- Explicit freighter terms
               UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
               OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-              OR UPPER(a.aircraft_details) LIKE '%BCF%'
-              OR UPPER(a.aircraft_details) LIKE '%SF%'
-              OR UPPER(a.aircraft_details) LIKE '%-F%'
+              OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
+              OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
+              OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
+              OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+              
+              -- Broad F pattern for comprehensive coverage
+              OR UPPER(a.aircraft_details) LIKE '%F%'
             )
+            -- Exclude military and passenger patterns
             AND NOT (
-              UPPER(a.aircraft_details) LIKE '%FK%'
-              OR UPPER(a.aircraft_details) LIKE '%TANKER%'
-              OR UPPER(a.aircraft_details) LIKE '%VIP%'
+              UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
+              OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
+              OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
+              OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
+              OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
             )
             THEN 'Freighter'
             ELSE 'Passenger'
@@ -184,9 +193,9 @@ serve(async (req: Request) => {
           a.type, a.aircraft_details, a.registration,
           fm.destination_code, fm.destination_name, fm.dest_country, fm.dest_continent,
           aircraft_category, fm.location_match
-        HAVING COUNT(*) >= 1
+        HAVING COUNT(*) >= 2  -- Filter out single-flight operations for performance
         ORDER BY a.operator, aircraft_category, frequency DESC
-        LIMIT 5000;
+        LIMIT 10000;
       `
       
       // 7. Execute the query with timeout logging
