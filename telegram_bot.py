@@ -278,6 +278,9 @@ def preprocess_locations(query: str) -> dict:
     for typo, correction in typo_corrections.items():
         corrected_query = corrected_query.replace(typo, correction)
     
+    # Remove common conjunctions to avoid detecting them as airports
+    corrected_query = corrected_query.replace(" and ", " ").replace(" & ", " ").replace(" + ", " ")
+    
     # Extract locations and classify them
     locations = []
     words = corrected_query.split()
@@ -295,15 +298,22 @@ def preprocess_locations(query: str) -> dict:
     # Common country names (can be expanded)
     country_names = ["china", "japan", "germany", "thailand", "korea", "south korea", "taiwan"]
     
+    # Words to exclude from airport detection
+    excluded_words = ["and", "or", "to", "from", "the", "in", "on", "at", "by", "for", "with"]
+    
     for word in words:
         word_lower = word.lower()
         word_upper = word.upper()
         
+        # Skip excluded words
+        if word_lower in excluded_words:
+            continue
+            
         # Check continent codes/names first
         if word_lower in continent_codes_map:
             code, type_name = continent_codes_map[word_lower]
             locations.append((code, type_name))
-        # Check if it's a 3-letter airport code
+        # Check if it's a 3-letter airport code (but not excluded words)
         elif len(word_upper) == 3 and word_upper.isalpha() and word_lower not in continent_codes_map:
             locations.append((word_upper, "airport"))
         # Check if it's a country name
@@ -843,7 +853,7 @@ def format_geographic_operator_results(results: dict) -> dict:
         "operators": operator_buttons
     }
 
-def format_results_for_telegram_for_telegram(results: dict, function_name: str):
+def format_results_for_telegram(results: dict, function_name: str):
     """Format results for Telegram message.
     
     Returns:
