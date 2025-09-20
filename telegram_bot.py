@@ -9,6 +9,7 @@ import json
 import logging
 import asyncio
 import requests
+import urllib.parse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from openai import OpenAI
@@ -1318,7 +1319,9 @@ async def execute_aircraft_destination_search(update: Update, context: ContextTy
             # Create operator buttons (Function 10 style)
             keyboard = []
             for op in response_data["operators"][:20]:  # Top 20 operators for buttons
-                callback_data = f"select_operator_func12_{op['name']}"
+                # Encode operator name to handle special characters like &
+                encoded_name = urllib.parse.quote(op['name'], safe='')
+                callback_data = f"select_operator_func12_{encoded_name}"
                 button_text = f"📋 {op['name']} Details"
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
             
@@ -1406,7 +1409,9 @@ async def handle_aircraft_destination_search(update: Update, context: ContextTyp
             # Create operator buttons (Function 10 style)
             keyboard = []
             for op in response_data["operators"][:20]:  # Top 20 operators for buttons
-                callback_data = f"select_operator_func12_{op['name']}"
+                # Encode operator name to handle special characters like &
+                encoded_name = urllib.parse.quote(op['name'], safe='')
+                callback_data = f"select_operator_func12_{encoded_name}"
                 button_text = f"📋 {op['name']} Details"
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
             
@@ -1739,7 +1744,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 if i == len(messages) - 1 and operators:
                     keyboard = []
                     for op in operators:
-                        callback_data = f"select_operator_geo_{op['name']}"
+                        # Encode operator name to handle special characters like &
+                        encoded_name = urllib.parse.quote(op['name'], safe='')
+                        callback_data = f"select_operator_geo_{encoded_name}"
                         keyboard.append([InlineKeyboardButton(op['button_text'], callback_data=callback_data)])
                     
                     # Add additional buttons
@@ -1762,7 +1769,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if operators:
                 keyboard = []
                 for op in operators:
-                    callback_data = f"select_operator_func12_{op['name']}"
+                    # Encode operator name to handle special characters like &
+                encoded_name = urllib.parse.quote(op['name'], safe='')
+                callback_data = f"select_operator_func12_{encoded_name}"
                     button_text = f"📋 {op['name']} Details"
                     keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
                 
@@ -1867,10 +1876,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             
             if is_geographic_selection:
                 # Geographic operator selection (Function 10) - preserve original results
-                operator_name = callback_data.replace("select_operator_geo_", "")
+                encoded_name = callback_data.replace("select_operator_geo_", "")
+                operator_name = urllib.parse.unquote(encoded_name)
             elif is_func12_selection:
                 # Function 12 operator selection - preserve original results
-                operator_name = callback_data.replace("select_operator_func12_", "")
+                encoded_name = callback_data.replace("select_operator_func12_", "")
+                operator_name = urllib.parse.unquote(encoded_name)
             else:
                 # Regular operator selection (Function 8 search) - replace message
                 parts = callback_data.split("_", 3)
