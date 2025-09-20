@@ -1569,10 +1569,19 @@ async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT
         # Send loading message
         await update.message.reply_text(f"🔍 Searching {operator_name} destinations in {geography_input}...")
         
+        # Clean operator name - fix common issues like Icel&air -> Icelandair
+        cleaned_operator_name = operator_name
+        if "icel&air" in operator_name.lower():
+            # Handle Icelandair specifically - database has 'Icelandair' not 'Icel&air'
+            cleaned_operator_name = "Icelandair"  # Fix the corruption
+        elif "&" in operator_name and "icel" not in operator_name.lower():
+            # Only apply general & replacement for non-Icelandair operators
+            cleaned_operator_name = operator_name.replace("&", " and ")
+        
         # Call the enhanced Supabase function with geographic filtering
         # Note: This will require the Supabase function to be enhanced in Phase 2
         results = await call_supabase_function("get_operator_details", {
-            "operator_selection": operator_name,
+            "operator_selection": cleaned_operator_name,
             "geographic_filter": geography_input,
             "filter_type": filter_type
         })
