@@ -1897,8 +1897,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # Clean operator name - try to fix common issues like Icel&air -> Icelandair
             cleaned_operator_name = operator_name
             if "icel&air" in operator_name.lower():
-                # Handle Icelandair specifically - keep the original name as it exists in database
-                cleaned_operator_name = operator_name  # Don't change it, database has 'Icel&air'
+                # Handle Icelandair specifically - database has 'Icelandair' not 'Icel&air'
+                cleaned_operator_name = "Icelandair"  # Fix the corruption
             elif "&" in operator_name and "icel" not in operator_name.lower():
                 # Only apply general & replacement for non-Icelandair operators
                 cleaned_operator_name = operator_name.replace("&", " and ")

@@ -392,6 +392,14 @@ async function getOperatorGeographicDestinations(
   `
 
   // Execute the geographic query
+  console.log(`DEBUG: Geographic query parameters:`, {
+    operator: operatorSelection,
+    startTime,
+    endTime,
+    filterType,
+    geographicFilter: geographicFilter
+  });
+
   const geographicResult = await connection.queryObject(geographicSql, [
     operatorSelection,  // $1
     startTime,          // $2
@@ -401,6 +409,24 @@ async function getOperatorGeographicDestinations(
   ]);
 
   console.log(`Geographic query returned ${geographicResult.rows?.length || 0} destinations`)
+  
+  // DEBUG: Check if operator exists at all
+  const operatorCheckSql = `
+    SELECT DISTINCT a.operator, COUNT(*) as total_flights
+    FROM movements m
+    JOIN aircraft a ON m.registration = a.registration
+    WHERE (a.operator ILIKE '%${operatorSelection}%' 
+           OR a.operator ILIKE '%Icel%' 
+           OR a.operator ILIKE '%Iceland%')
+      AND m.scheduled_departure >= $1
+      AND m.scheduled_departure <= $2
+    GROUP BY a.operator
+    ORDER BY total_flights DESC
+    LIMIT 10;
+  `;
+  
+  const operatorCheck = await connection.queryObject(operatorCheckSql, [startTime, endTime]);
+  console.log(`DEBUG: Similar operators found:`, operatorCheck.rows);
 
   if (!geographicResult.rows || geographicResult.rows.length === 0) {
     return new Response(
