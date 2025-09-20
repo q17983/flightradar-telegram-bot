@@ -116,20 +116,26 @@ BACKUP_FUNCTION_MAP = {
 async def analyze_query_with_openai(user_query: str, time_frame: dict = None) -> dict:
     """Use OpenAI to analyze user query and determine intent with universal location intelligence."""
     
-    # Set default time frame if not provided
-    if not time_frame:
-        time_frame = {"start_time": "2024-04-01", "end_time": "2025-05-31"}
+    # Create clean function map without time parameters for OpenAI prompt
+    clean_function_map = {}
+    for func_name, func_data in FUNCTION_MAP.items():
+        clean_params = [param for param in func_data["params"] if param not in ["start_time", "end_time"]]
+        clean_function_map[func_name] = {
+            "url": func_data["url"],
+            "params": clean_params,
+            "description": func_data["description"]
+        }
     
     prompt = f"""
 You are a flight data assistant for a cargo charter broker with UNIVERSAL LOCATION INTELLIGENCE. Analyze this query and return the best function to call from the 4 CORE FUNCTIONS only.
 
 CORE FUNCTIONS ONLY:
-{json.dumps(FUNCTION_MAP, indent=2)}
+{json.dumps(clean_function_map, indent=2)}
 
 User query: "{user_query}"
 
 CRITICAL RULES:
-- Use time range: start_time: "{time_frame['start_time']}", end_time: "{time_frame['end_time']}"
+- DO NOT include start_time or end_time in your response - time filtering is handled separately
 - Apply UNIVERSAL LOCATION INTELLIGENCE with typo correction
 - Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL
 - Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
@@ -411,7 +417,7 @@ FUNCTION: get_operators_by_geographic_locations
 PURPOSE: Find operators serving between countries/continents/airports
 
 IMPORTANT RULES:
-- Use time range: start_time: "{time_frame['start_time']}", end_time: "{time_frame['end_time']}"
+- DO NOT include start_time or end_time in your response - time filtering is handled separately
 - Apply UNIVERSAL LOCATION INTELLIGENCE with typo correction
 - Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL, TLV
 - Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
