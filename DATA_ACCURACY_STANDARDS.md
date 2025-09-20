@@ -25,9 +25,10 @@ All functions must prioritize complete and accurate data over performance optimi
 
 ### **Rule 2: Complete Operator Coverage**
 - ✅ **ALWAYS** include ALL operators serving a route/destination
-- ✅ **ALWAYS** use sufficient LIMIT (minimum 50,000 records for all queries)
+- ✅ **ALWAYS** use sufficient LIMIT (minimum 50,000 records for search/analysis queries)
+- ✅ **Display functions** may use reasonable limits (15-50) for optimal user experience
 - ✅ **ALWAYS** alert user if data exceeds processing limits
-- ❌ **NEVER** silently truncate operator lists
+- ❌ **NEVER** silently truncate operator lists in search results
 
 ### **Rule 3: Accurate Aircraft Classification**
 - ✅ **ALWAYS** use complete freighter detection logic:
@@ -124,9 +125,9 @@ When queries risk timeout due to large datasets:
 
 ### **Function 8: get-operator-details**
 - ✅ Complete fleet analysis (all aircraft types)
-- ✅ All route destinations
+- ✅ Top destinations (reasonable limit: 50 for display)
 - ✅ Accurate freighter/passenger percentages
-- ✅ Complete registration lists
+- ✅ Complete registration lists (reasonable limit for display)
 
 ### **Function 10: get-operators-by-geographic-locations**
 - ✅ ALL operators serving BOTH locations
@@ -146,7 +147,8 @@ When queries risk timeout due to large datasets:
 
 ### **Never Use These for Performance:**
 - ❌ `HAVING COUNT(*) > 1` (eliminates single-flight operations)
-- ❌ `LIMIT < 50000` for all queries (may miss operators)
+- ❌ `LIMIT < 50000` for search/analysis queries (may miss operators)
+- ❌ `LIMIT < 15-50` for display functions (poor user experience)
 - ❌ Simplified freighter detection (misses aircraft types)
 - ❌ Geographic filtering that excludes valid airports
 - ❌ Time range adjustments without user consent

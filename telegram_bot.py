@@ -1328,8 +1328,16 @@ async def execute_aircraft_destination_search(update: Update, context: ContextTy
                 InlineKeyboardButton("❌ Cancel", callback_data="cancel")
             ])
             
+            # Send the message content first (may be split into multiple messages)
+            await send_large_message(update.message, response_data["message"])
+            
+            # Send operator buttons separately to ensure they're always visible
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await send_large_message(update.message, response_data["message"], reply_markup)
+            await update.message.reply_text(
+                "🔗 **OPERATOR QUICK ACCESS:**\nClick any button below for detailed operator analysis:",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
         else:
             await update.message.reply_text(response_data["message"], parse_mode='Markdown')
             
