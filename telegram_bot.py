@@ -1770,8 +1770,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 keyboard = []
                 for op in operators:
                     # Encode operator name to handle special characters like &
-                encoded_name = urllib.parse.quote(op['name'], safe='')
-                callback_data = f"select_operator_func12_{encoded_name}"
+                    encoded_name = urllib.parse.quote(op['name'], safe='')
+                    callback_data = f"select_operator_func12_{encoded_name}"
                     button_text = f"📋 {op['name']} Details"
                     keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
                 
