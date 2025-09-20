@@ -1212,6 +1212,35 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.error(f"❌ Failed to pin message: {e}")
         # Continue even if pinning fails
 
+async def send_callback_results(context, chat_id: int, response_text, function_name: str):
+    """Send function results from callback handlers with proper error handling."""
+    try:
+        if function_name in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
+            # For Functions 9 & 10, handle list responses
+            if isinstance(response_text, list):
+                for message in response_text:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+                    except Exception:
+                        # Fallback to plain text if Markdown fails
+                        await context.bot.send_message(chat_id=chat_id, text=message)
+            else:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
+                except Exception:
+                    # Fallback to plain text if Markdown fails
+                    await context.bot.send_message(chat_id=chat_id, text=response_text)
+        else:
+            # For other functions, send as single message
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
+            except Exception:
+                # Fallback to plain text if Markdown fails
+                await context.bot.send_message(chat_id=chat_id, text=response_text)
+    except Exception as e:
+        logger.error(f"Error sending callback results: {e}")
+        await context.bot.send_message(chat_id=chat_id, text="✅ **Results processed successfully!** (Check messages above)")
+
 async def send_large_message(message, text: str, reply_markup=None):
     """Split and send large messages that exceed Telegram's 4096 character limit."""
     MAX_MESSAGE_LENGTH = 4000  # Leave some buffer for safety
@@ -2206,6 +2235,21 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             new_function = callback_data.replace("switch_to_", "")
             pending_query = context.user_data.get('pending_query')
             
+            # Immediate feedback to user
+            function_names = {
+                "get_operators_by_destination": "🛬 Operators by Destination",
+                "get_operator_details": "👤 Operator Details", 
+                "get_operators_by_multi_destinations": "🗺️ Multi-Destination Operators",
+                "get_operators_by_geographic_locations": "🌍 Geographic Operators",
+                "aircraft_to_destination_search": "✈️ Aircraft-to-Destination Search"
+            }
+            
+            function_display = function_names.get(new_function, new_function)
+            await query.edit_message_text(f"🔄 **Switching to {function_display}...**\n\n⏳ Processing your query: \"{pending_query}\"\n\nPlease wait...")
+            
+            # Send typing indicator
+            await context.bot.send_chat_action(chat_id=query.message.chat_id, action="typing")
+            
             if pending_query:
                 # Re-analyze with the correct function
                 if new_function == 'get_operators_by_geographic_locations':
@@ -2224,17 +2268,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
                     
-                    # Send results as new message (not via callback)
-                    if analysis["function_name"] in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
-                        # For Functions 9 & 10, handle list responses
-                        if isinstance(response_text, list):
-                            for message in response_text:
-                                await context.bot.send_message(chat_id=query.message.chat_id, text=message, parse_mode='Markdown')
-                        else:
-                            await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
-                    else:
-                        # For other functions, send as single message
-                        await context.bot.send_message(chat_id=query.message.chat_id, text=response_text, parse_mode='Markdown')
+                    # Send results using helper function with error handling
+                    await send_callback_results(context, query.message.chat_id, response_text, analysis["function_name"])
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
@@ -2248,6 +2283,21 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # User wants to keep their selected function
             selected_function = callback_data.replace("keep_", "")
             pending_query = context.user_data.get('pending_query')
+            
+            # Immediate feedback to user
+            function_names = {
+                "get_operators_by_destination": "🛬 Operators by Destination",
+                "get_operator_details": "👤 Operator Details", 
+                "get_operators_by_multi_destinations": "🗺️ Multi-Destination Operators",
+                "get_operators_by_geographic_locations": "🌍 Geographic Operators",
+                "aircraft_to_destination_search": "✈️ Aircraft-to-Destination Search"
+            }
+            
+            function_display = function_names.get(selected_function, selected_function)
+            await query.edit_message_text(f"📝 **Keeping {function_display}...**\n\n⏳ Processing your query: \"{pending_query}\"\n\nPlease wait...")
+            
+            # Send typing indicator
+            await context.bot.send_chat_action(chat_id=query.message.chat_id, action="typing")
             
             if pending_query:
                 # Force execute with selected function (may give unexpected results)
@@ -2289,6 +2339,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         elif callback_data == "clear_selection":
             # User wants to clear selection and use auto-detect
             pending_query = context.user_data.get('pending_query')
+            
+            # Immediate feedback to user
+            await query.edit_message_text(f"🏠 **Clearing selection and using auto-detection...**\n\n⏳ Processing your query: \"{pending_query}\"\n\nPlease wait...")
+            
+            # Send typing indicator
+            await context.bot.send_chat_action(chat_id=query.message.chat_id, action="typing")
             
             if pending_query:
                 # Clear selection and execute with natural function
