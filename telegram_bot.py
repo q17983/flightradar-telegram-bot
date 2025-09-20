@@ -1213,33 +1213,65 @@ async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_T
         # Continue even if pinning fails
 
 async def send_callback_results(context, chat_id: int, response_text, function_name: str):
-    """Send function results from callback handlers with proper error handling."""
+    """Send function results from callback handlers with proper chunking and error handling."""
+    MAX_MESSAGE_LENGTH = 4000  # Leave buffer for safety
+    
     try:
         if function_name in ["get_operators_by_multi_destinations", "get_operators_by_geographic_locations"]:
             # For Functions 9 & 10, handle list responses
             if isinstance(response_text, list):
                 for message in response_text:
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
-                    except Exception:
-                        # Fallback to plain text if Markdown fails
-                        await context.bot.send_message(chat_id=chat_id, text=message)
+                    await send_chunked_message(context, chat_id, message)
             else:
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
-                except Exception:
-                    # Fallback to plain text if Markdown fails
-                    await context.bot.send_message(chat_id=chat_id, text=response_text)
+                await send_chunked_message(context, chat_id, response_text)
         else:
             # For other functions, send as single message
-            try:
-                await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
-            except Exception:
-                # Fallback to plain text if Markdown fails
-                await context.bot.send_message(chat_id=chat_id, text=response_text)
+            await send_chunked_message(context, chat_id, response_text)
     except Exception as e:
         logger.error(f"Error sending callback results: {e}")
         await context.bot.send_message(chat_id=chat_id, text="✅ **Results processed successfully!** (Check messages above)")
+
+async def send_chunked_message(context, chat_id: int, text: str):
+    """Send a message with proper chunking if it's too long."""
+    MAX_MESSAGE_LENGTH = 4000
+    
+    if len(text) <= MAX_MESSAGE_LENGTH:
+        # Message is small enough, send normally
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode='Markdown')
+        except Exception:
+            # Fallback to plain text if Markdown fails
+            await context.bot.send_message(chat_id=chat_id, text=text)
+        return
+    
+    # Split the message at natural break points
+    parts = []
+    current_part = ""
+    
+    for line in text.split('\n'):
+        if len(current_part) + len(line) + 1 <= MAX_MESSAGE_LENGTH:
+            current_part += line + '\n'
+        else:
+            if current_part:
+                parts.append(current_part.strip())
+            current_part = line + '\n'
+    
+    if current_part:
+        parts.append(current_part.strip())
+    
+    # Send all parts
+    for i, part in enumerate(parts):
+        try:
+            if i < len(parts) - 1:
+                # Add continuation indicator
+                part_with_indicator = part + f"\n\n*📄 Continued in next message... ({i+1}/{len(parts)})*"
+                await context.bot.send_message(chat_id=chat_id, text=part_with_indicator, parse_mode='Markdown')
+            else:
+                # Last message
+                await context.bot.send_message(chat_id=chat_id, text=part, parse_mode='Markdown')
+        except Exception:
+            # Fallback to plain text
+            await context.bot.send_message(chat_id=chat_id, text=part)
 
 async def send_large_message(message, text: str, reply_markup=None):
     """Split and send large messages that exceed Telegram's 4096 character limit."""
