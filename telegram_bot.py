@@ -10,6 +10,7 @@ import logging
 import asyncio
 import requests
 import urllib.parse
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from openai import OpenAI
@@ -1583,16 +1584,12 @@ async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT
         # Format the geographic results
         response_text = format_geographic_destinations(results, operator_name, geography_input, filter_type)
         
-        # Send results with back button
+        # Send results with back button using send_large_message to handle long messages
         keyboard = [[InlineKeyboardButton("🔙 Back to Full Details", 
                                         callback_data=f"back_to_operator_{operator_name.replace(' ', '_')}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
-            text=response_text,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        await send_large_message(update.message, response_text, reply_markup)
         
     except Exception as e:
         logger.error(f"Error in geographic filter: {e}")
@@ -1878,10 +1875,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 # Geographic operator selection (Function 10) - preserve original results
                 encoded_name = callback_data.replace("select_operator_geo_", "")
                 operator_name = urllib.parse.unquote(encoded_name)
+                # Handle HTML entities like &amp; -> &
+                operator_name = html.unescape(operator_name)
+                logger.info(f"DEBUG: Geographic selection - encoded: {encoded_name}, decoded: {operator_name}")
             elif is_func12_selection:
                 # Function 12 operator selection - preserve original results
                 encoded_name = callback_data.replace("select_operator_func12_", "")
                 operator_name = urllib.parse.unquote(encoded_name)
+                # Handle HTML entities like &amp; -> &
+                operator_name = html.unescape(operator_name)
+                logger.info(f"DEBUG: Function 12 selection - encoded: {encoded_name}, decoded: {operator_name}")
             else:
                 # Regular operator selection (Function 8 search) - replace message
                 parts = callback_data.split("_", 3)
@@ -1891,8 +1894,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 else:
                     return
             
+            # Clean operator name - try to fix common issues like Icel&air -> Icelandair
+            cleaned_operator_name = operator_name
+            if "Icel&air" in operator_name:
+                cleaned_operator_name = operator_name.replace("Icel&air", "Icelandair")
+            elif "&" in operator_name:
+                # Try replacing & with "and" for other operators
+                cleaned_operator_name = operator_name.replace("&", " and ")
+            
+            logger.info(f"DEBUG: Original operator: {operator_name}, Cleaned: {cleaned_operator_name}")
+            
             # Get full operator details using Function 8
-            results = await call_supabase_function("get_operator_details", {"operator_selection": operator_name})
+            results = await call_supabase_function("get_operator_details", {"operator_selection": cleaned_operator_name})
             
             # Format and display results
             response_text = format_operator_details(results)
@@ -2321,6 +2334,52 @@ def extract_operator_from_query(query: str) -> str:
         query_clean = " ".join(word for word in words if word not in words_to_remove)
     
     return query_clean.strip()
+
+def format_geographic_destinations(results: dict, operator_name: str, geography_input: str, filter_type: str) -> str:
+    """Format geographic destination results for Function 8 geographic filtering."""
+    if results.get("error"):
+        return f"❌ {results['error']}"
+    
+    destinations = results.get("destinations", [])
+    
+    if not destinations:
+        return f"❌ No destinations found for {operator_name} in {geography_input}. Try alternative spelling or check if operator serves this region."
+    
+    # Create header
+    filter_emoji = "🌍" if filter_type == "continent" else "🏳️"
+    message = f"{filter_emoji} **{operator_name} Destinations in {geography_input}**\n\n"
+    message += f"📊 **Summary:** {len(destinations)} airports, {sum(d.get('total_flights', 0) for d in destinations):,} total flights\n\n"
+    
+    # List destinations (limit to prevent message too long error)
+    display_limit = 25  # Limit to prevent Telegram message length issues
+    
+    for i, dest in enumerate(destinations[:display_limit], 1):
+        airport_name = dest.get('airport_name', 'Unknown')
+        iata_code = dest.get('destination_code', '???')
+        country = dest.get('country_name', 'Unknown')
+        continent = dest.get('continent', 'Unknown')
+        total_flights = dest.get('total_flights', 0)
+        avg_monthly = dest.get('avg_flights_per_month', 0)
+        aircraft_types = dest.get('aircraft_types_used', [])
+        
+        message += f"{i}. **{airport_name}** ({iata_code})\n"
+        message += f"   📍 {country}, {continent}\n"
+        message += f"   ✈️ {total_flights:,} flights ({avg_monthly} avg/month)\n"
+        
+        if aircraft_types:
+            types_display = ", ".join(aircraft_types[:3])
+            if len(aircraft_types) > 3:
+                types_display += f" (+{len(aircraft_types) - 3} more)"
+            message += f"   🛩️ Aircraft: {types_display}\n"
+        
+        message += "\n"
+    
+    # Add truncation notice if needed
+    if len(destinations) > display_limit:
+        message += f"... and {len(destinations) - display_limit} more destinations\n\n"
+        message += f"💡 *Showing top {display_limit} destinations to prevent message length issues*\n"
+    
+    return message
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log errors."""
