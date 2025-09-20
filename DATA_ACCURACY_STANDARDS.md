@@ -25,7 +25,7 @@ All functions must prioritize complete and accurate data over performance optimi
 
 ### **Rule 2: Complete Operator Coverage**
 - ✅ **ALWAYS** include ALL operators serving a route/destination
-- ✅ **ALWAYS** use sufficient LIMIT (minimum 10,000 records for complex queries)
+- ✅ **ALWAYS** use sufficient LIMIT (minimum 50,000 records for all queries)
 - ✅ **ALWAYS** alert user if data exceeds processing limits
 - ❌ **NEVER** silently truncate operator lists
 
@@ -102,7 +102,7 @@ When queries risk timeout due to large datasets:
 ### **Before Deployment:**
 - [ ] **Query Review:** Does the query include ALL relevant data?
 - [ ] **Filter Audit:** Do any filters eliminate important data?
-- [ ] **Limit Check:** Is the LIMIT sufficient for complete coverage?
+- [ ] **Limit Check:** Is the LIMIT at least 50,000 for complete coverage?
 - [ ] **Classification Review:** Is aircraft/operator classification complete?
 - [ ] **Time Range Test:** Are boundary conditions handled correctly?
 
@@ -146,7 +146,7 @@ When queries risk timeout due to large datasets:
 
 ### **Never Use These for Performance:**
 - ❌ `HAVING COUNT(*) > 1` (eliminates single-flight operations)
-- ❌ `LIMIT < 10000` for complex queries (may miss operators)
+- ❌ `LIMIT < 50000` for all queries (may miss operators)
 - ❌ Simplified freighter detection (misses aircraft types)
 - ❌ Geographic filtering that excludes valid airports
 - ❌ Time range adjustments without user consent

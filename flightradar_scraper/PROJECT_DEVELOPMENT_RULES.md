@@ -45,7 +45,7 @@ All functions must prioritize complete and accurate data over performance optimi
    - ❌ NEVER use simplified detection that misses aircraft types
 
 3. **Timeout Management Strategy**
-   - ✅ Alert user when data exceeds 10,000 records
+   - ✅ Alert user when data exceeds 50,000 records
    - ✅ Suggest specific time frame reductions
    - ✅ Maintain full accuracy within suggested time frames
    - ❌ NEVER silently truncate results

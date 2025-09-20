@@ -195,7 +195,7 @@ serve(async (req: Request) => {
           aircraft_category, fm.location_match
         HAVING COUNT(*) >= 1  -- Include all operations for complete accuracy
         ORDER BY a.operator, aircraft_category, frequency DESC
-        LIMIT 10000;
+        LIMIT 50000;
       `
       
       // 7. Execute the query with timeout logging
@@ -208,12 +208,12 @@ serve(async (req: Request) => {
       console.log("📊 Raw query results:", queryResult.rows?.length || 0, "records")
 
       // Check if we hit the limit and suggest time frame adjustment
-      if (queryResult.rows && queryResult.rows.length >= 10000) {
-        console.log("⚠️ Hit 10,000 record limit - may have incomplete data")
+      if (queryResult.rows && queryResult.rows.length >= 50000) {
+        console.log("⚠️ Hit 50,000 record limit - may have incomplete data")
         return new Response(
           JSON.stringify({ 
             error: 'Too many results to process accurately',
-            message: 'The query returned too many results (10,000+ records) which may cause incomplete data or timeouts.',
+            message: 'The query returned too many results (50,000+ records) which may cause incomplete data or timeouts.',
             suggestion: 'Please narrow your search by using a shorter time frame:',
             recommended_time_frames: [
               'Past 3 months: Reduce time range to last 3 months for more focused analysis',

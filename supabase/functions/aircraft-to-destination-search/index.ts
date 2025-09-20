@@ -256,7 +256,7 @@ async function searchOperatorsByAircraftAndDestinations(
       AND a.operator != ''
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, aircraft_category
     ORDER BY total_flights DESC
-    LIMIT 10000;  -- Increased for complete coverage
+    LIMIT 50000;  -- Increased for maximum coverage
   `
   
   console.log("Executing search with parameters:", {
@@ -280,12 +280,12 @@ async function searchOperatorsByAircraftAndDestinations(
   console.log(`Search query returned ${searchResult.rows.length} operators`)
   
   // Check if we hit the limit and suggest time frame adjustment
-  if (searchResult.rows && searchResult.rows.length >= 10000) {
-    console.log("⚠️ Hit 10,000 record limit - may have incomplete data")
+  if (searchResult.rows && searchResult.rows.length >= 50000) {
+    console.log("⚠️ Hit 50,000 record limit - may have incomplete data")
     return new Response(
       JSON.stringify({ 
         error: 'Too many results to process accurately',
-        message: 'The query returned too many results (10,000+ records) which may cause incomplete data or timeouts.',
+        message: 'The query returned too many results (50,000+ records) which may cause incomplete data or timeouts.',
         suggestion: 'Please narrow your search by using a shorter time frame:',
         recommended_time_frames: [
           'Past 3 months: Reduce time range to last 3 months for more focused analysis',

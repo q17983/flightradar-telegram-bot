@@ -168,7 +168,7 @@ async function searchOperators(connection: any, searchQuery: string) {
       )
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
     ORDER BY match_rank ASC, aircraft_count DESC
-    LIMIT 15;
+    LIMIT 50000;
   `
   
   const result = await connection.queryObject(searchSql, [searchQuery])
@@ -263,7 +263,7 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
       AND m.scheduled_departure <= $3
     GROUP BY m.destination_code
     ORDER BY total_flights DESC
-    LIMIT 30;
+    LIMIT 50000;
   `
 
   // Execute both queries
@@ -388,7 +388,7 @@ async function getOperatorGeographicDestinations(
       )
     GROUP BY m.destination_code, ag.airport_name, ag.country_name, ag.continent
     ORDER BY total_flights DESC
-    LIMIT 30;
+    LIMIT 50000;
   `
 
   // Execute the geographic query
