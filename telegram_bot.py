@@ -2296,8 +2296,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     # Create a mock update object to reuse existing message handling
                     class MockUpdate:
                         def __init__(self, query_obj, text):
-                            self.message = query_obj.message
-                            self.message.text = text
+                            # Create a mock message object with the new text
+                            class MockMessage:
+                                def __init__(self, original_message, new_text):
+                                    self.text = new_text
+                                    self.chat = original_message.chat
+                                    self.from_user = original_message.from_user
+                                    self.reply_text = original_message.reply_text
+                            
+                            self.message = MockMessage(query_obj.message, text)
                             self.effective_chat = query_obj.message.chat
                     
                     # Create mock update and reuse existing message handling logic
@@ -2349,8 +2356,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     # Create a mock update object to reuse existing message handling
                     class MockUpdate:
                         def __init__(self, query_obj, text):
-                            self.message = query_obj.message
-                            self.message.text = text
+                            # Create a mock message object with the new text
+                            class MockMessage:
+                                def __init__(self, original_message, new_text):
+                                    self.text = new_text
+                                    self.chat = original_message.chat
+                                    self.from_user = original_message.from_user
+                                    self.reply_text = original_message.reply_text
+                            
+                            self.message = MockMessage(query_obj.message, text)
                             self.effective_chat = query_obj.message.chat
                     
                     # Create mock update and reuse existing message handling logic
@@ -2392,8 +2406,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     # Create a mock update object to reuse existing message handling
                     class MockUpdate:
                         def __init__(self, query_obj, text):
-                            self.message = query_obj.message
-                            self.message.text = text
+                            # Create a mock message object with the new text
+                            class MockMessage:
+                                def __init__(self, original_message, new_text):
+                                    self.text = new_text
+                                    self.chat = original_message.chat
+                                    self.from_user = original_message.from_user
+                                    self.reply_text = original_message.reply_text
+                            
+                            self.message = MockMessage(query_obj.message, text)
                             self.effective_chat = query_obj.message.chat
                     
                     # Create mock update and reuse existing message handling logic
