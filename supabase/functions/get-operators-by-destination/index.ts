@@ -87,8 +87,9 @@ serve(async (req: Request) => {
         FROM movements m
         JOIN aircraft a ON m.registration = a.registration
         WHERE m.destination_code = $1
-          AND m.scheduled_departure >= $2
-          AND m.scheduled_departure <= $3
+          AND m.actual_arrival >= $2
+          AND m.actual_arrival <= $3
+          AND m.actual_arrival IS NOT NULL
           AND a.operator IS NOT NULL
         GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, a.type, a.aircraft_details, aircraft_category
         ORDER BY frequency DESC, a.operator ASC;

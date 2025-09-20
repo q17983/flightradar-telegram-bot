@@ -250,8 +250,9 @@ async function searchOperatorsByAircraftAndDestinations(
         OR (ag.country_name ILIKE ANY($3) AND $3 != ARRAY['%NONE%'])  -- Country patterns  
         OR (ag.continent = ANY($4) AND $4 != ARRAY['NONE'])  -- Continent codes
       )
-      AND m.scheduled_departure >= $5::date
-      AND m.scheduled_departure <= $6::date
+      AND m.actual_arrival >= $5::date
+      AND m.actual_arrival <= $6::date
+      AND m.actual_arrival IS NOT NULL
       AND a.operator IS NOT NULL
       AND a.operator != ''
     GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, aircraft_category

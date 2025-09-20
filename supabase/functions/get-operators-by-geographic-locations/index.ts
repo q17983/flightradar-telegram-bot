@@ -136,15 +136,16 @@ serve(async (req: Request) => {
           SELECT 
             m.registration,
             m.destination_code,
-            m.scheduled_departure,
+            m.actual_arrival,
             la.location_match,
             la.airport_name as destination_name,
             la.country_name as dest_country,
             la.continent as dest_continent
           FROM movements m
           INNER JOIN location_airports la ON m.destination_code = la.iata_code
-          WHERE m.scheduled_departure >= $1
-            AND m.scheduled_departure <= $2
+          WHERE m.actual_arrival >= $1
+            AND m.actual_arrival <= $2
+            AND m.actual_arrival IS NOT NULL
             AND m.destination_code IS NOT NULL  -- Ensure clean data
         )
         SELECT

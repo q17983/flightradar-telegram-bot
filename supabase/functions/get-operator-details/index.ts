@@ -259,8 +259,9 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
     FROM movements m
     JOIN aircraft a ON m.registration = a.registration
     WHERE a.operator = $1
-      AND m.scheduled_departure >= $2
-      AND m.scheduled_departure <= $3
+      AND m.actual_arrival >= $2
+      AND m.actual_arrival <= $3
+      AND m.actual_arrival IS NOT NULL
     GROUP BY m.destination_code
     ORDER BY total_flights DESC
     LIMIT 50;
@@ -377,8 +378,9 @@ async function getOperatorGeographicDestinations(
     JOIN aircraft a ON m.registration = a.registration
     JOIN airports_geography ag ON m.destination_code = ag.iata_code
     WHERE a.operator = $1
-      AND m.scheduled_departure >= $2
-      AND m.scheduled_departure <= $3
+      AND m.actual_arrival >= $2
+      AND m.actual_arrival <= $3
+      AND m.actual_arrival IS NOT NULL
       AND (
         CASE 
           WHEN $4 = 'country' THEN ag.country_name ILIKE $5
@@ -418,8 +420,9 @@ async function getOperatorGeographicDestinations(
     WHERE (a.operator ILIKE '%${operatorSelection}%' 
            OR a.operator ILIKE '%Icel%' 
            OR a.operator ILIKE '%Iceland%')
-      AND m.scheduled_departure >= $1
-      AND m.scheduled_departure <= $2
+      AND m.actual_arrival >= $1
+      AND m.actual_arrival <= $2
+      AND m.actual_arrival IS NOT NULL
     GROUP BY a.operator
     ORDER BY total_flights DESC
     LIMIT 10;
