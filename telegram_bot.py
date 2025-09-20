@@ -843,7 +843,7 @@ def format_geographic_operator_results(results: dict) -> dict:
         "operators": operator_buttons
     }
 
-def format_results_for_telegram(results: dict, function_name: str):
+def format_results_for_telegram_for_telegram(results: dict, function_name: str):
     """Format results for Telegram message.
     
     Returns:
@@ -1970,7 +1970,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.info(f"Supabase results: {results}")
         
         # Format and send results
-        response_text = format_results_for_telegram(results, analysis["function_name"])
+        response_text = format_results_for_telegram_for_telegram(results, analysis["function_name"])
         
         # Handle Function 9 which returns list of messages
         if analysis["function_name"] == "get_operators_by_multi_destinations" and isinstance(response_text, list):
@@ -2194,76 +2194,93 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         elif callback_data.startswith("switch_to_"):
             # User wants to switch to the suggested function
             new_function = callback_data.replace("switch_to_", "")
-            pending_analysis = context.user_data.get('pending_analysis')
+            pending_query = context.user_data.get('pending_query')
             
-            if pending_analysis:
-                # Execute with the natural function
-                pending_analysis['function_name'] = new_function
-                context.user_data['selected_function'] = new_function
+            if pending_query:
+                # Re-analyze with the correct function
+                if new_function == 'get_operators_by_geographic_locations':
+                    analysis = await analyze_geographic_query_with_openai(pending_query)
+                else:
+                    analysis = await analyze_query_with_openai(pending_query)
                 
-                results = await call_supabase_function(
-                    pending_analysis["function_name"], 
-                    pending_analysis["parameters"]
-                )
-                
-                response_text = format_results(results, pending_analysis["function_name"])
-                await send_large_message(query.message.chat.id, response_text, context)
-                
-                # Clean up
-                context.user_data.pop('pending_analysis', None)
-                context.user_data.pop('pending_query', None)
-                
-                await query.edit_message_text("✅ **Switched and executed successfully!**")
+                if analysis:
+                    analysis['function_name'] = new_function
+                    context.user_data['selected_function'] = new_function
+                    
+                    results = await call_supabase_function(
+                        analysis["function_name"], 
+                        analysis["parameters"]
+                    )
+                    
+                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    await send_large_message(query.message.chat.id, response_text, context)
+                    
+                    # Clean up
+                    context.user_data.pop('pending_analysis', None)
+                    context.user_data.pop('pending_query', None)
+                    
+                    await query.edit_message_text("✅ **Switched and executed successfully!**")
+                else:
+                    await query.edit_message_text("❌ **Error re-analyzing query**")
             
         elif callback_data.startswith("keep_"):
             # User wants to keep their selected function
             selected_function = callback_data.replace("keep_", "")
-            pending_analysis = context.user_data.get('pending_analysis')
             pending_query = context.user_data.get('pending_query')
             
-            if pending_analysis and pending_query:
+            if pending_query:
                 # Force execute with selected function (may give unexpected results)
                 if selected_function == 'get_operators_by_geographic_locations':
                     analysis = await analyze_geographic_query_with_openai(pending_query)
                 else:
-                    analysis = pending_analysis
+                    analysis = await analyze_query_with_openai(pending_query)
+                
+                if analysis:
                     analysis['function_name'] = selected_function
-                
-                results = await call_supabase_function(
-                    analysis["function_name"], 
-                    analysis["parameters"]
-                )
-                
-                response_text = format_results(results, analysis["function_name"])
-                await send_large_message(query.message.chat.id, response_text, context)
-                
-                # Clean up
-                context.user_data.pop('pending_analysis', None)
-                context.user_data.pop('pending_query', None)
-                
-                await query.edit_message_text("✅ **Executed with your selected function!**")
+                    
+                    results = await call_supabase_function(
+                        analysis["function_name"], 
+                        analysis["parameters"]
+                    )
+                    
+                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    await send_large_message(query.message.chat.id, response_text, context)
+                    
+                    # Clean up
+                    context.user_data.pop('pending_analysis', None)
+                    context.user_data.pop('pending_query', None)
+                    
+                    await query.edit_message_text("✅ **Executed with your selected function!**")
+                else:
+                    await query.edit_message_text("❌ **Error processing with selected function**")
         
         elif callback_data == "clear_selection":
             # User wants to clear selection and use auto-detect
-            pending_analysis = context.user_data.get('pending_analysis')
+            pending_query = context.user_data.get('pending_query')
             
-            if pending_analysis:
+            if pending_query:
                 # Clear selection and execute with natural function
                 context.user_data.pop('selected_function', None)
                 
-                results = await call_supabase_function(
-                    pending_analysis["function_name"], 
-                    pending_analysis["parameters"]
-                )
+                # Re-analyze without preset function
+                analysis = await analyze_query_with_openai(pending_query)
                 
-                response_text = format_results(results, pending_analysis["function_name"])
-                await send_large_message(query.message.chat.id, response_text, context)
-                
-                # Clean up
-                context.user_data.pop('pending_analysis', None)
-                context.user_data.pop('pending_query', None)
-                
-                await query.edit_message_text("✅ **Selection cleared - using auto-detection!**")
+                if analysis:
+                    results = await call_supabase_function(
+                        analysis["function_name"], 
+                        analysis["parameters"]
+                    )
+                    
+                    response_text = format_results_for_telegram(results, analysis["function_name"])
+                    await send_large_message(query.message.chat.id, response_text, context)
+                    
+                    # Clean up
+                    context.user_data.pop('pending_analysis', None)
+                    context.user_data.pop('pending_query', None)
+                    
+                    await query.edit_message_text("✅ **Selection cleared - using auto-detection!**")
+                else:
+                    await query.edit_message_text("❌ **Error with auto-detection**")
 
         # Function 12 Aircraft Selection Handlers
         elif callback_data.startswith("func12_aircraft_"):
