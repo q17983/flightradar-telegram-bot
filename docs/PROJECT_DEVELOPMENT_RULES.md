@@ -774,6 +774,60 @@ Before deploying ANY changes that modify data processing:
 3. **Error handling patterns** - define standard approaches
 4. **Field naming conventions** - prevent mismatches like `destinations` vs `geographic_destinations`
 
+### **📱 TELEGRAM API SPECIFIC RULES**
+
+#### **Callback Query Limitations (CRITICAL):**
+```python
+# ❌ NEVER do this in callback handlers:
+query.message.text = "new text"  # Message.text is READ-ONLY!
+
+# ❌ NEVER use send_large_message() in callback context:
+await send_large_message(query.message, large_text)  # Different behavior than normal messages
+
+# ❌ NEVER pass chat_id to functions expecting message objects:
+await send_large_message(query.message.chat_id, text)  # 'int' object has no attribute 'reply_text'
+```
+
+#### **✅ PROVEN CALLBACK PATTERNS:**
+```python
+# ✅ GOOD: MockMessage for simulating user input
+class MockMessage:
+    def __init__(self, original_message, new_text):
+        self.text = new_text  # Writable attribute
+        self.chat = original_message.chat
+        self.from_user = original_message.from_user
+        self.reply_text = original_message.reply_text
+
+class MockUpdate:
+    def __init__(self, query_obj, text):
+        self.message = MockMessage(query_obj.message, text)
+        self.effective_chat = query_obj.message.chat
+
+# ✅ GOOD: Reuse existing message handlers
+mock_update = MockUpdate(query, user_input)
+await handle_message(mock_update, context)  # Uses proven working code
+```
+
+#### **✅ CALLBACK RESULT HANDLING RULES:**
+1. **For normal-sized results:** Use MockUpdate + existing message handlers
+2. **For large results:** Consider pagination or summary approaches
+3. **For complex formatting:** Always reuse existing formatting functions
+4. **For error handling:** Leverage existing error handling patterns
+
+### **🚨 TELEGRAM API ANTI-PATTERNS**
+
+#### **Never Use in Callback Context:**
+- ❌ Direct message object modification
+- ❌ Custom result chunking (use existing patterns)
+- ❌ Mixed callback/message handling approaches
+- ❌ Complex callback-specific error handling
+
+#### **Always Use:**
+- ✅ MockMessage/MockUpdate for input simulation
+- ✅ Existing message handlers for result processing
+- ✅ Standard error handling patterns
+- ✅ Proven formatting functions
+
 ### **✅ SUCCESS FACTORS**
 
 **What worked in the Icelandair crisis:**
@@ -782,7 +836,13 @@ Before deploying ANY changes that modify data processing:
 - ✅ Systematic version comparison methodology
 - ✅ Persistent debugging until root cause found
 
-**Key Insight:** Combination of detailed logging + systematic comparison solved the mystery.
+**What worked in the Callback System crisis:**
+- ✅ User's insight: "Use the same pattern as normal Function 10"
+- ✅ MockMessage approach for read-only attribute limitations
+- ✅ Progressive debugging: Address one issue at a time
+- ✅ Reusing proven code instead of reinventing
+
+**Key Insight:** When facing Telegram API limitations, simulate normal user input flow instead of creating callback-specific handling.
 
 ---
 

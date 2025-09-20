@@ -13,6 +13,8 @@
 │
 ├── 📱 ACTIVE CODE (CORE FUNCTIONALITY)
 │   ├── telegram_bot.py              # Main Telegram bot (Railway deployment)
+│   ├── airport_sync_script.py       # ⭐ Airport & country data synchronization
+│   ├── scraper_Final_v5_11APR.py    # ⭐ FlightRadar24 data scraper (complete)
 │   ├── requirements.txt             # Python dependencies
 │   ├── Procfile                     # Railway deployment configuration
 │   └── supabase/                    # Backend Edge Functions (Supabase)
@@ -33,11 +35,22 @@
 │   ├── TELEGRAM_BOT_SETUP.md               # Bot setup guide
 │   ├── README.md                           # Project overview
 │   │
+│   ├── chat_history/                       # ⭐ Complete conversation records
+│   │   ├── CHAT_HISTORY_INDEX.md           # Navigation index for all conversations
+│   │   └── history/                        # All development conversations (Apr-Sep 2025)
+│   │       ├── 2025-04-05_*                # Project genesis conversations
+│   │       ├── 2025-09-13_*                # Foundation development
+│   │       ├── 2025-09-14_*                # Core feature development
+│   │       ├── 2025-09-15_*                # Advanced features & filtering
+│   │       └── 2025-09-20_*                # Crisis debugging & resolution
+│   │
 │   ├── checkpoints/                        # Recent major milestones
 │   │   ├── CHECKPOINT_018_ICELANDAIR_CRISIS.md  # ⭐ Latest debugging crisis
 │   │   ├── CHECKPOINT_017_FUNCTION_12.md        # Function 12 completion
 │   │   ├── CHECKPOINT_016_FUNCTION_8.md         # Function 8 enhancement
 │   │   └── CHECKPOINT_SYSTEM.md                 # Checkpoint methodology
+│   │
+│   ├── CALLBACK_SYSTEM_DEBUGGING_SUMMARY.md    # ⭐ Callback system lessons learned
 │   │
 │   └── archives/                           # Older documentation
 │       ├── FUNCTION_8_*.md                 # Function 8 development docs
@@ -85,10 +98,13 @@
 ### **⭐ FOR NEW CONVERSATIONS:**
 - **`docs/PROJECT_CONTEXT_SUMMARY.md`** - Complete project understanding
 - **`docs/PROJECT_DEVELOPMENT_RULES.md`** - Development protocols
+- **`docs/chat_history/CHAT_HISTORY_INDEX.md`** - Complete conversation history
 - **`docs/checkpoints/CHECKPOINT_018_ICELANDAIR_CRISIS.md`** - Latest status
 
 ### **🔧 FOR DEVELOPMENT:**
 - **`telegram_bot.py`** - Main bot code
+- **`airport_sync_script.py`** - Airport & country data synchronization
+- **`scraper_Final_v5_11APR.py`** - FlightRadar24 data collection
 - **`supabase/functions/`** - All backend functions
 - **`requirements.txt`** - Dependencies
 - **`Procfile`** - Railway deployment
@@ -99,6 +115,7 @@
 - **`scripts/scraper/`** - Data collection tools
 
 ### **🗃️ FOR REFERENCE:**
+- **`docs/chat_history/`** - Complete conversation records
 - **`legacy/flightradar_scraper_legacy/`** - Complete old structure
 - **`docs/archives/`** - Historical documentation
 - **`legacy/unused_files/`** - Preserved but inactive files

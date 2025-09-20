@@ -106,12 +106,16 @@ When queries risk timeout due to large datasets:
 - [ ] **Limit Check:** Is the LIMIT at least 50,000 for complete coverage?
 - [ ] **Classification Review:** Is aircraft/operator classification complete?
 - [ ] **Time Range Test:** Are boundary conditions handled correctly?
+- [ ] **Callback System Test:** Do callback handlers produce identical results to direct function calls?
+- [ ] **Large Dataset Test:** Can the system handle 100+ operator results in callback context?
 
 ### **During Development:**
 - [ ] **Test with Large Datasets:** Verify behavior with high-volume routes
 - [ ] **Test Edge Cases:** Single-flight operators, rare aircraft types
 - [ ] **Test Time Boundaries:** Start/end date edge cases
 - [ ] **Compare Results:** Cross-check with known data for accuracy
+- [ ] **Test Callback Consistency:** Verify callback results match direct function calls
+- [ ] **Test Function Switching:** Ensure mismatch dialogs work and produce correct results
 
 ---
 
@@ -140,6 +144,13 @@ When queries risk timeout due to large datasets:
 - ✅ ALL destinations served by that aircraft
 - ✅ Complete route frequency data
 - ✅ Accurate aircraft variant matching
+
+### **Callback System Accuracy Requirements**
+- ✅ **Identical Results:** Callback execution must produce same results as direct function calls
+- ✅ **Data Consistency:** MockMessage approach maintains all data integrity
+- ✅ **Error Handling:** Same error handling patterns as normal message processing
+- ⚠️ **Large Dataset Limitation:** 100+ operator results may require alternative UX in callback context
+- ✅ **Function Switching:** Mismatch detection and switching preserves data accuracy
 
 ---
 

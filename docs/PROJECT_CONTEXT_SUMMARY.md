@@ -77,6 +77,11 @@ A **Telegram bot** that provides **cargo charter flight data analysis** through 
    - Issue: Operators with `&` characters causing callback data corruption
    - Solution: URL encoding/decoding + operator name cleaning
 
+5. **Callback System Implementation** - ✅ RESOLVED (Sep 20, 2025)
+   - Issue: Multiple callback handling errors (read-only attributes, text length, object types)
+   - Solution: MockMessage/MockUpdate pattern to reuse existing message handlers
+   - Note: Large datasets in callbacks remain challenging (use direct function for 100+ operators)
+
 ---
 
 ## 🏗️ **SYSTEM ARCHITECTURE**
@@ -202,6 +207,9 @@ Complex CASE statement with 15+ rules to classify aircraft as 'Freighter' vs 'Pa
 - Same functionality works in one place, fails in another
 - Data corruption patterns (special characters, encoding)
 - Field name mismatches between functions
+- Telegram API object attribute errors (read-only properties)
+- Callback context behaving differently than normal messages
+- Function name corruption after replace_all operations
 
 ---
 
@@ -218,6 +226,8 @@ Complex CASE statement with 15+ rules to classify aircraft as 'Freighter' vs 'Pa
 2. **Remove debug logging** from Function 8 (temporary debug code)
 3. **Standardize field names** across all function responses
 4. **Add integration tests** for complete user workflows
+5. **Callback system large dataset handling** - investigate pagination for 100+ operator results
+6. **Function name safety** - avoid replace_all operations that can corrupt names
 
 ---
 
