@@ -113,11 +113,15 @@ BACKUP_FUNCTION_MAP = {
     }
 }
 
-async def analyze_query_with_openai(user_query: str) -> dict:
-    """Use OpenAI to analyze user query and determine intent."""
+async def analyze_query_with_openai(user_query: str, time_frame: dict = None) -> dict:
+    """Use OpenAI to analyze user query and determine intent with universal location intelligence."""
+    
+    # Set default time frame if not provided
+    if not time_frame:
+        time_frame = {"start_time": "2024-04-01", "end_time": "2025-05-31"}
     
     prompt = f"""
-You are a flight data assistant for a cargo charter broker. Analyze this query and return the best function to call from the 4 CORE FUNCTIONS only.
+You are a flight data assistant for a cargo charter broker with UNIVERSAL LOCATION INTELLIGENCE. Analyze this query and return the best function to call from the 4 CORE FUNCTIONS only.
 
 CORE FUNCTIONS ONLY:
 {json.dumps(FUNCTION_MAP, indent=2)}
@@ -125,8 +129,8 @@ CORE FUNCTIONS ONLY:
 User query: "{user_query}"
 
 CRITICAL RULES:
-- ALWAYS use the full database range: start_time: "2024-04-01", end_time: "2025-05-31"
-- IGNORE any specific dates mentioned by user - always use the full 408-day period
+- Use time range: start_time: "{time_frame['start_time']}", end_time: "{time_frame['end_time']}"
+- Apply UNIVERSAL LOCATION INTELLIGENCE with typo correction
 - Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL
 - Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
 
@@ -138,24 +142,39 @@ COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
 - Thailand/Thai → "Thailand"
 - Germany/German → "Germany"
 
-CONTINENT CODES (Use these exact codes):
-- Asia → "AS"
-- North America → "NA" 
-- Europe → "EU"
-- South America → "SA"
-- Africa → "AF"
-- Oceania → "OC"
-- Antarctica → "AN"
+UNIVERSAL LOCATION INTELLIGENCE (with typo correction):
 
-FUNCTION SELECTION LOGIC:
+CONTINENT CODES (Use these exact codes):
+- Asia/asia/ASIA/Aisa/Asai → "AS"
+- North America/north america/Noth America/Nroth America/North Amreica → "NA" 
+- Europe/europe/EUROPE/Eruope/Europ → "EU"
+- South America/south america/South Amreica → "SA"
+- Africa/africa/AFRICA/Afirca → "AF"
+- Oceania/oceania/OCEANIA → "OC"
+- Antarctica/antarctica → "AN"
+
+AIRPORT CODE RECOGNITION (case-insensitive):
+- 3-letter codes: JFK/jfk/Jfk → "JFK", NRT/nrt → "NRT", TPE/tpe → "TPE"
+- Always convert to uppercase for processing
+
+CONJUNCTION HANDLING:
+- "AND"/"and"/"&"/"+"/"," → multiple locations
+- "NRT AND TPE" → ["NRT", "TPE"] (both airports)
+- "Asia and JFK" → ["AS", "JFK"] (continent + airport)
+- "NRT, TPE" → ["NRT", "TPE"] (comma-separated airports)
+
+SMART FUNCTION SELECTION LOGIC:
 1. "who flies to [AIRPORT]" → get_operators_by_destination
    Example: "who flies to LAX" → destination_code: "LAX"
 
 2. "operator details [NAME]" or "show operator [NAME]" → get_operator_details
    Example: "operator details FedEx" → search_query: "FedEx"
 
-3. "operators to both [X] and [Y]" or "which operators fly to both" → get_operators_by_multi_destinations
-   Example: "operators to both JFK and LAX" → destination_codes: ["JFK", "LAX"]
+3. "operators to both [X] and [Y]" → SMART ROUTING based on location types:
+   - Both airports: get_operators_by_multi_destinations
+     Example: "operators to both JFK and LAX" → destination_codes: ["JFK", "LAX"]
+   - Mixed types: get_operators_by_geographic_locations  
+     Example: "operators to both AS and JFK" → first_location_type: "continent", first_location_value: "AS", second_location_type: "airport", second_location_value: "JFK"
 
 4. "[LOCATION] to [LOCATION] operators" or geographic queries → get_operators_by_geographic_locations
    Example: "Korea to Japan operators" → first_location_type: "country", first_location_value: "South Korea", second_location_type: "country", second_location_value: "Japan"
@@ -204,21 +223,139 @@ Return JSON:
         logger.error(f"Error with OpenAI: {e}")
         return None
 
-async def analyze_geographic_query_with_openai(query: str) -> dict:
-    """Analyze user query as geographic query (Function 10) using OpenAI."""
+def get_time_frame_options() -> dict:
+    """Generate time frame options for user selection."""
+    from datetime import datetime, timedelta
+    
+    end_date = datetime(2025, 5, 31)  # Database end date
+    
+    time_frames = {
+        "1_month": {
+            "start_time": "2025-04-01",
+            "end_time": "2025-05-31", 
+            "label": "📅 Last 1 Month (Apr-May 2025)",
+            "description": "Most recent data"
+        },
+        "3_months": {
+            "start_time": "2025-02-01", 
+            "end_time": "2025-05-31",
+            "label": "📅 Last 3 Months (Feb-May 2025)",
+            "description": "Recent quarter"
+        },
+        "6_months": {
+            "start_time": "2024-11-01",
+            "end_time": "2025-05-31", 
+            "label": "📅 Last 6 Months (Nov 2024-May 2025)",
+            "description": "Half-year analysis"
+        },
+        "12_months": {
+            "start_time": "2024-04-01",
+            "end_time": "2025-05-31",
+            "label": "📅 Full Period (Apr 2024-May 2025)", 
+            "description": "Complete dataset (408 days)"
+        }
+    }
+    
+    return time_frames
+
+def preprocess_locations(query: str) -> dict:
+    """Universal location intelligence with typo correction."""
+    
+    # Typo correction mapping
+    typo_corrections = {
+        # Continents (case-insensitive)
+        "noth america": "North America", "nroth america": "North America", "north amreica": "North America",
+        "aisa": "Asia", "asai": "Asia", "eruope": "Europe", "europ": "Europe",
+        "south amreica": "South America", "afirca": "Africa",
+        # Countries  
+        "germny": "Germany", "grmany": "Germany", "chna": "China", "jpan": "Japan",
+        # Conjunctions
+        "&": " and ", "+": " and ", ",": " and "
+    }
+    
+    # Apply corrections (case-insensitive)
+    corrected_query = query.lower()
+    for typo, correction in typo_corrections.items():
+        corrected_query = corrected_query.replace(typo, correction)
+    
+    # Extract locations and classify them
+    locations = []
+    words = corrected_query.split()
+    
+    # Simple location detection (can be enhanced)
+    continent_codes = ["asia", "north america", "europe", "south america", "africa", "oceania", "antarctica"]
+    airport_pattern = r'\b[A-Z]{3}\b'  # 3-letter codes
+    
+    for word in words:
+        word_upper = word.upper()
+        if len(word_upper) == 3 and word_upper.isalpha():
+            locations.append((word_upper, "airport"))
+        elif word.lower() in continent_codes:
+            locations.append((word, "continent"))
+    
+    return {
+        "original_query": query,
+        "corrected_query": corrected_query,
+        "locations": locations,
+        "location_types": [loc[1] for loc in locations]
+    }
+
+def check_function_compatibility(selected_function: str, natural_function: str, processed_query: dict) -> dict:
+    """Check compatibility between selected function and natural query analysis."""
+    
+    location_types = processed_query.get("location_types", [])
+    
+    compatibility_rules = {
+        "get_operators_by_destination": {
+            "compatible": len(location_types) == 1 and "airport" in location_types,
+            "reason": "Single airport destination queries"
+        },
+        "get_operator_details": {
+            "compatible": len(location_types) == 0,  # No locations = operator name
+            "reason": "Operator name queries without locations"
+        },
+        "get_operators_by_multi_destinations": {
+            "compatible": len(location_types) >= 2 and all(t == "airport" for t in location_types),
+            "reason": "Multiple airport destinations (same type)"
+        },
+        "get_operators_by_geographic_locations": {
+            "compatible": len(location_types) >= 2,  # Any multiple locations
+            "reason": "Geographic queries between locations"
+        }
+    }
+    
+    selected_rule = compatibility_rules.get(selected_function, {"compatible": False, "reason": "Unknown function"})
+    
+    return {
+        "is_compatible": selected_rule["compatible"],
+        "selected_function": selected_function,
+        "natural_function": natural_function,
+        "reason": selected_rule["reason"],
+        "location_types": location_types,
+        "suggestion": "switch" if not selected_rule["compatible"] else "proceed"
+    }
+
+async def analyze_geographic_query_with_openai(query: str, time_frame: dict = None) -> dict:
+    """Analyze user query as geographic query (Function 10) using OpenAI with universal location intelligence."""
+    
+    # Set default time frame if not provided
+    if not time_frame:
+        time_frame = {"start_time": "2024-04-01", "end_time": "2025-05-31"}
+    
     try:
         response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a flight data analysis assistant. Analyze user queries as GEOGRAPHIC QUERIES for Function 10.
+                    "content": f"""You are a flight data analysis assistant with UNIVERSAL LOCATION INTELLIGENCE. Analyze user queries as GEOGRAPHIC QUERIES for Function 10.
 
 FUNCTION: get_operators_by_geographic_locations
 PURPOSE: Find operators serving between countries/continents/airports
 
 IMPORTANT RULES:
-- ALWAYS use the full database range: start_time: "2024-04-01", end_time: "2025-05-31"
+- Use time range: start_time: "{time_frame['start_time']}", end_time: "{time_frame['end_time']}"
+- Apply UNIVERSAL LOCATION INTELLIGENCE with typo correction
 - Use EXACT airport codes (3-letter IATA) like LAX, JFK, LHR, DXB, SCL, TLV
 - Use EXACT country names - DO NOT TRANSLATE: "Korea" stays "Korea", "Korean" refers to "Korea"
 
@@ -230,14 +367,25 @@ COUNTRY/CONTINENT MAPPING (DO NOT TRANSLATE):
 - Thailand/Thai → "Thailand"
 - Germany/German → "Germany"
 
+UNIVERSAL LOCATION INTELLIGENCE (with typo correction):
+
 CONTINENT CODES (Use these exact codes):
-- Asia → "AS"
-- North America → "NA" 
-- Europe → "EU"
-- South America → "SA"
-- Africa → "AF"
-- Oceania → "OC"
-- Antarctica → "AN"
+- Asia/asia/ASIA/Aisa/Asai → "AS"
+- North America/north america/Noth America/Nroth America/North Amreica → "NA" 
+- Europe/europe/EUROPE/Eruope/Europ → "EU"
+- South America/south america/South Amreica → "SA"
+- Africa/africa/AFRICA/Afirca → "AF"
+- Oceania/oceania/OCEANIA → "OC"
+- Antarctica/antarctica → "AN"
+
+AIRPORT CODE RECOGNITION (case-insensitive):
+- 3-letter codes: JFK/jfk/Jfk → "JFK", NRT/nrt → "NRT", TPE/tpe → "TPE"
+- Always convert to uppercase for processing
+
+CONJUNCTION HANDLING:
+- "AND"/"and"/"&"/"+"/"," → multiple locations
+- "Asia and JFK" → continent + airport (geographic query)
+- "NRT and TPE" → airport + airport (should be multi-destinations, but force as geographic if preset)
 
 GEOGRAPHIC QUERY PATTERNS:
 - "China to TLV" → first_location_type: "country", first_location_value: "China", second_location_type: "airport", second_location_value: "TLV"
@@ -293,6 +441,45 @@ Return JSON:
     except Exception as e:
         logger.error(f"OpenAI geographic analysis failed: {e}")
         return None
+
+async def handle_function_mismatch(update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                 selected_function: str, natural_analysis: dict, user_query: str) -> None:
+    """Handle function mismatch with user guidance."""
+    
+    natural_function = natural_analysis.get('function_name', 'unknown')
+    
+    # Function name mapping for user-friendly display
+    function_names = {
+        "get_operators_by_destination": "🛬 Operators by Destination",
+        "get_operator_details": "👤 Operator Details", 
+        "get_operators_by_multi_destinations": "🗺️ Multi-Destination Operators",
+        "get_operators_by_geographic_locations": "🌍 Geographic Operators",
+        "aircraft_to_destination_search": "✈️ Aircraft-to-Destination Search"
+    }
+    
+    selected_name = function_names.get(selected_function, selected_function)
+    natural_name = function_names.get(natural_function, natural_function)
+    
+    message = f"""⚠️ **Function Mismatch Detected**
+
+You have **{selected_name}** selected, but your query "{user_query}" looks like a **{natural_name}** search.
+
+🤔 **What would you like to do?**"""
+
+    # Create buttons for user choice
+    keyboard = [
+        [InlineKeyboardButton(f"🔄 Switch to {natural_name}", callback_data=f"switch_to_{natural_function}")],
+        [InlineKeyboardButton(f"📝 Keep {selected_name}", callback_data=f"keep_{selected_function}")],
+        [InlineKeyboardButton("🏠 Clear Selection (Auto-detect)", callback_data="clear_selection")],
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Store the analysis for later use
+    context.user_data['pending_analysis'] = natural_analysis
+    context.user_data['pending_query'] = user_query
+    
+    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     """Call Supabase Edge Function."""
@@ -1688,18 +1875,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     )
                     return
             else:
-                # Create analysis with forced function
-                if selected_function == 'get_operators_by_geographic_locations':
-                    # For Function 10, force geographic analysis
-                    analysis = await analyze_geographic_query_with_openai(user_query)
-                else:
-                    # For other functions, use normal analysis
-                    analysis = await analyze_query_with_openai(user_query)
+                # SMART PRESET SYSTEM: Check compatibility before forcing function
                 
-                if analysis:
-                    # Override the function name with user's selection
-                    analysis['function_name'] = selected_function
-                    logger.info(f"🔄 Overrode function to: {selected_function}")
+                # Step 1: Analyze what the query naturally should be
+                natural_analysis = await analyze_query_with_openai(user_query)
+                
+                if not natural_analysis:
+                    await update.message.reply_text(
+                        "❌ Sorry, I couldn't understand your query. Please try rephrasing it."
+                    )
+                    return
+                
+                # Step 2: Preprocess locations for compatibility check
+                processed_query = preprocess_locations(user_query)
+                
+                # Step 3: Check compatibility
+                compatibility = check_function_compatibility(
+                    selected_function, 
+                    natural_analysis['function_name'], 
+                    processed_query
+                )
+                
+                if compatibility['is_compatible'] or selected_function == natural_analysis['function_name']:
+                    # ✅ Compatible or same function - proceed with selected function
+                    if selected_function == 'get_operators_by_geographic_locations':
+                        analysis = await analyze_geographic_query_with_openai(user_query)
+                    else:
+                        analysis = natural_analysis
+                    
+                    if analysis:
+                        analysis['function_name'] = selected_function
+                        logger.info(f"🔄 Using selected function: {selected_function} (compatible)")
+                else:
+                    # ⚠️ Incompatible - show user guidance
+                    await handle_function_mismatch(update, context, selected_function, natural_analysis, user_query)
+                    return
             
             # Keep the selection persistent - don't clear it
             # User can change it by using /selectfunction again
@@ -1953,6 +2163,81 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         raise e
                 await query.answer()
             
+        # Smart Preset Mismatch Handlers
+        elif callback_data.startswith("switch_to_"):
+            # User wants to switch to the suggested function
+            new_function = callback_data.replace("switch_to_", "")
+            pending_analysis = context.user_data.get('pending_analysis')
+            
+            if pending_analysis:
+                # Execute with the natural function
+                pending_analysis['function_name'] = new_function
+                context.user_data['selected_function'] = new_function
+                
+                results = await call_supabase_function(
+                    pending_analysis["function_name"], 
+                    pending_analysis["parameters"]
+                )
+                
+                response_text = format_results(results, pending_analysis["function_name"])
+                await send_large_message(query.message.chat.id, response_text, context)
+                
+                # Clean up
+                context.user_data.pop('pending_analysis', None)
+                context.user_data.pop('pending_query', None)
+                
+                await query.edit_message_text("✅ **Switched and executed successfully!**")
+            
+        elif callback_data.startswith("keep_"):
+            # User wants to keep their selected function
+            selected_function = callback_data.replace("keep_", "")
+            pending_analysis = context.user_data.get('pending_analysis')
+            pending_query = context.user_data.get('pending_query')
+            
+            if pending_analysis and pending_query:
+                # Force execute with selected function (may give unexpected results)
+                if selected_function == 'get_operators_by_geographic_locations':
+                    analysis = await analyze_geographic_query_with_openai(pending_query)
+                else:
+                    analysis = pending_analysis
+                    analysis['function_name'] = selected_function
+                
+                results = await call_supabase_function(
+                    analysis["function_name"], 
+                    analysis["parameters"]
+                )
+                
+                response_text = format_results(results, analysis["function_name"])
+                await send_large_message(query.message.chat.id, response_text, context)
+                
+                # Clean up
+                context.user_data.pop('pending_analysis', None)
+                context.user_data.pop('pending_query', None)
+                
+                await query.edit_message_text("✅ **Executed with your selected function!**")
+        
+        elif callback_data == "clear_selection":
+            # User wants to clear selection and use auto-detect
+            pending_analysis = context.user_data.get('pending_analysis')
+            
+            if pending_analysis:
+                # Clear selection and execute with natural function
+                context.user_data.pop('selected_function', None)
+                
+                results = await call_supabase_function(
+                    pending_analysis["function_name"], 
+                    pending_analysis["parameters"]
+                )
+                
+                response_text = format_results(results, pending_analysis["function_name"])
+                await send_large_message(query.message.chat.id, response_text, context)
+                
+                # Clean up
+                context.user_data.pop('pending_analysis', None)
+                context.user_data.pop('pending_query', None)
+                
+                await query.edit_message_text("✅ **Selection cleared - using auto-detection!**")
+
         # Function 12 Aircraft Selection Handlers
         elif callback_data.startswith("func12_aircraft_"):
             # Handle individual aircraft selection toggle
