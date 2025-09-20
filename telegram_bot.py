@@ -2340,7 +2340,7 @@ def format_geographic_destinations(results: dict, operator_name: str, geography_
     if results.get("error"):
         return f"❌ {results['error']}"
     
-    destinations = results.get("destinations", [])
+    destinations = results.get("geographic_destinations", [])
     
     if not destinations:
         return f"❌ No destinations found for {operator_name} in {geography_input}. Try alternative spelling or check if operator serves this region."

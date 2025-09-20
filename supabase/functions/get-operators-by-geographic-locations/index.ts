@@ -260,8 +260,16 @@ serve(async (req: Request) => {
         const operatorKey = `${flight.operator_iata_code}|${flight.operator}`
         
         if (!operatorMap.has(operatorKey)) {
+          // Clean operator name to fix HTML entity issues like Icel&air -> Icelandair
+          let cleanOperatorName = flight.operator
+          if (cleanOperatorName && cleanOperatorName.includes('&')) {
+            cleanOperatorName = cleanOperatorName.replace('Icel&air', 'Icelandair')
+                                                .replace('&amp;', '&')
+                                                .replace('&', ' & ')
+          }
+          
           operatorMap.set(operatorKey, {
-            operator: flight.operator,
+            operator: cleanOperatorName,
             operator_iata_code: flight.operator_iata_code,
             operator_icao_code: flight.operator_icao_code,
             first_location_flights: 0,
