@@ -2223,7 +2223,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message.chat.id, response_text, context)
+                    await send_large_message(query.message, response_text)
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
@@ -2254,7 +2254,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message.chat.id, response_text, context)
+                    await send_large_message(query.message, response_text)
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
@@ -2282,7 +2282,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     
                     response_text = format_results_for_telegram(results, analysis["function_name"])
-                    await send_large_message(query.message.chat.id, response_text, context)
+                    await send_large_message(query.message, response_text)
                     
                     # Clean up
                     context.user_data.pop('pending_analysis', None)
