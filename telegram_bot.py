@@ -69,7 +69,7 @@ FUNCTION_MAP = {
     },
     "get_operator_details": {
         "url": f"{SUPABASE_URL}/functions/v1/get-operator-details",
-        "params": ["search_query", "operator_selection"],
+        "params": ["search_query", "operator_selection", "start_time", "end_time"],
         "description": "Function 8: Search for operator details with fleet and route analysis"
     },
     "get_operators_by_multi_destinations": {
@@ -223,40 +223,60 @@ Return JSON:
         logger.error(f"Error with OpenAI: {e}")
         return None
 
-def get_time_frame_options() -> dict:
-    """Generate time frame options for user selection."""
+
+async def get_dynamic_time_frames() -> dict:
+    """Generate dynamic time frame options based on today's date."""
     from datetime import datetime, timedelta
     
-    end_date = datetime(2025, 5, 31)  # Database end date
+    # Use today's date for all relative periods
+    today = datetime.now().date()
+    today_str = today.strftime("%Y-%m-%d")
+    
+    # Calculate relative dates from today
+    date_7_days = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+    date_30_days = (today - timedelta(days=30)).strftime("%Y-%m-%d") 
+    date_180_days = (today - timedelta(days=180)).strftime("%Y-%m-%d")
+    
+    # Database boundaries - use known dates (updated weekly)
+    db_start_date = "2024-04-01"
+    # Use a reasonable end date - will be updated as data grows
+    db_end_date = "2025-12-31"  # Future-proof end date
     
     time_frames = {
-        "1_month": {
-            "start_time": "2025-04-01",
-            "end_time": "2025-05-31", 
-            "label": "📅 Last 1 Month (Apr-May 2025)",
-            "description": "Most recent data"
+        "7_days": {
+            "start_time": date_7_days,
+            "end_time": today_str,
+            "label": "📅 Past 7 Days",
+            "description": f"Last week ({date_7_days} to {today_str})"
         },
-        "3_months": {
-            "start_time": "2025-02-01", 
-            "end_time": "2025-05-31",
-            "label": "📅 Last 3 Months (Feb-May 2025)",
-            "description": "Recent quarter"
+        "30_days": {
+            "start_time": date_30_days,
+            "end_time": today_str,
+            "label": "📅 Past 30 Days", 
+            "description": f"Last month ({date_30_days} to {today_str})"
         },
-        "6_months": {
-            "start_time": "2024-11-01",
-            "end_time": "2025-05-31", 
-            "label": "📅 Last 6 Months (Nov 2024-May 2025)",
-            "description": "Half-year analysis"
+        "180_days": {
+            "start_time": date_180_days,
+            "end_time": today_str,
+            "label": "📅 Past 6 Months",
+            "description": f"Half year ({date_180_days} to {today_str})"
         },
         "12_months": {
-            "start_time": "2024-04-01",
-            "end_time": "2025-05-31",
-            "label": "📅 Full Period (Apr 2024-May 2025)", 
-            "description": "Complete dataset (408 days)"
+            "start_time": (today - timedelta(days=365)).strftime("%Y-%m-%d"),
+            "end_time": today_str,
+            "label": "📅 Past 12 Months",
+            "description": f"Full year ({(today - timedelta(days=365)).strftime('%Y-%m-%d')} to {today_str})"
+        },
+        "custom": {
+            "start_time": None,
+            "end_time": None,
+            "label": "📅 Custom Range",
+            "description": "Enter your own dates"
         }
     }
     
     return time_frames
+
 
 def preprocess_locations(query: str) -> dict:
     """Universal location intelligence with typo correction."""
@@ -443,8 +463,8 @@ Return JSON:
         "first_location_value": "exact_value",
         "second_location_type": "airport|country|continent", 
         "second_location_value": "exact_value",
-        "start_time": "2024-04-01",
-        "end_time": "2025-05-31"
+        "start_time": "{time_frame['start_time']}",
+        "end_time": "{time_frame['end_time']}"
     }},
     "reasoning": "Brief explanation of geographic analysis"
 }}"""
@@ -518,7 +538,7 @@ You have **{selected_name}** selected, but your query "{user_query}" looks like 
     
     await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def call_supabase_function(function_name: str, parameters: dict) -> dict:
+async def call_supabase_function(function_name: str, parameters: dict, time_frame: dict = None) -> dict:
     """Call Supabase Edge Function."""
     
     # Log ALL function calls to see what's being called
@@ -535,9 +555,16 @@ async def call_supabase_function(function_name: str, parameters: dict) -> dict:
     else:
         return {"error": f"Unknown function: {function_name}"}
     
-    # FORCE the correct date range regardless of what Gemini suggests
-    parameters["start_time"] = "2024-04-01"
-    parameters["end_time"] = "2025-05-31"
+    # Use provided time frame or fall back to default
+    if time_frame and "start_time" in time_frame and "end_time" in time_frame:
+        parameters["start_time"] = time_frame["start_time"]
+        parameters["end_time"] = time_frame["end_time"]
+        logger.info(f"🕒 Using time frame: {time_frame['start_time']} to {time_frame['end_time']}")
+    elif "start_time" not in parameters or "end_time" not in parameters:
+        # Only set defaults if not already in parameters
+        parameters["start_time"] = "2024-04-01"
+        parameters["end_time"] = "2025-12-31"
+        logger.info("🕒 Using default time frame: 2024-04-01 to 2025-12-31")
     
     # Debug: Log the credentials being used
     logger.info(f"Using SUPABASE_URL: {SUPABASE_URL}")
@@ -953,6 +980,9 @@ I help you find carriers and routes for cargo flights!
 /help - Complete usage guide
 /examples - Query examples  
 /functions - Technical function details
+/timeframe - Select time period for analysis
+
+💡 *Tip:* Use /timeframe to choose your analysis period (7 days, 30 days, 6 months, full database, or custom range)
 
 Just ask me about any destination or airline! 🚀
 """
@@ -1152,6 +1182,57 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 • Response time: <3 seconds
 """
     await update.message.reply_text(functions_text, parse_mode='Markdown')
+
+async def timeframe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show time frame selection menu."""
+    try:
+        # Get dynamic time frames
+        time_frames = await get_dynamic_time_frames()
+        
+        keyboard = []
+        for key, frame in time_frames.items():
+            if key != "custom":  # Handle custom separately
+                keyboard.append([InlineKeyboardButton(
+                    frame["label"], 
+                    callback_data=f"timeframe_{key}"
+                )])
+        
+        # Add custom option
+        keyboard.append([InlineKeyboardButton(
+            "📅 Custom Range", 
+            callback_data="timeframe_custom"
+        )])
+        
+        # Add cancel button
+        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_timeframe")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = "🕒 **SELECT TIME PERIOD**\n\n"
+        message_text += "Choose your analysis period:\n\n"
+        
+        for key, frame in time_frames.items():
+            if key != "custom":
+                message_text += f"**{frame['label']}**\n"
+                message_text += f"   *{frame['description']}*\n\n"
+        
+        message_text += "**📅 Custom Range**\n"
+        message_text += "   *Enter your own start and end dates*\n\n"
+        message_text += "👆 **Select a time period to continue**"
+        
+        await update.message.reply_text(
+            message_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing time frame menu: {e}")
+        await update.message.reply_text(
+            "❌ **Error loading time frame options**\n\n"
+            "Please try again later.",
+            parse_mode='Markdown'
+        )
 
 async def selectfunction_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show function selection menu and pin it."""
@@ -1596,14 +1677,14 @@ async def execute_aircraft_destination_search(update: Update, context: ContextTy
             parse_mode='Markdown'
         )
         
-        # Call Supabase Function 12
-        results = await call_supabase_function("aircraft-to-destination-search", {
+        # Call Supabase Function 12 with selected time frame
+        selected_timeframe = context.user_data.get('selected_timeframe')
+        function_params = {
             "mode": "search",
             "aircraft_types": aircraft_types,
-            "destinations": destinations,
-            "start_time": "2024-04-01",
-            "end_time": "2025-05-31"
-        })
+            "destinations": destinations
+        }
+        results = await call_supabase_function("aircraft-to-destination-search", function_params, selected_timeframe)
         
         # Format and send results
         response_data = format_aircraft_destination_results(results, aircraft_types, destinations)
@@ -1686,14 +1767,14 @@ async def handle_aircraft_destination_search(update: Update, context: ContextTyp
             parse_mode='Markdown'
         )
         
-        # Call Supabase Function 12
-        results = await call_supabase_function("aircraft-to-destination-search", {
+        # Call Supabase Function 12 with selected time frame
+        selected_timeframe = context.user_data.get('selected_timeframe')
+        function_params = {
             "mode": "search",
             "aircraft_types": aircraft_types,
-            "destinations": destinations,
-            "start_time": "2024-04-01",
-            "end_time": "2025-05-31"
-        })
+            "destinations": destinations
+        }
+        results = await call_supabase_function("aircraft-to-destination-search", function_params, selected_timeframe)
         
         # Format and send results
         response_data = format_aircraft_destination_results(results, aircraft_types, destinations)
@@ -1870,13 +1951,14 @@ async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT
             # Only apply general & replacement for non-Icelandair operators
             cleaned_operator_name = operator_name.replace("&", " and ")
         
-        # Call the enhanced Supabase function with geographic filtering
-        # Note: This will require the Supabase function to be enhanced in Phase 2
-        results = await call_supabase_function("get_operator_details", {
+        # Call the enhanced Supabase function with geographic filtering and timeframe
+        selected_timeframe = context.user_data.get('selected_timeframe')
+        function_params = {
             "operator_selection": cleaned_operator_name,
             "geographic_filter": geography_input,
             "filter_type": filter_type
-        })
+        }
+        results = await call_supabase_function("get_operator_details", function_params, selected_timeframe)
         
         if results.get("error"):
             await update.message.reply_text(f"❌ {results['error']}")
@@ -1900,6 +1982,151 @@ async def handle_geographic_filter(update: Update, context: ContextTypes.DEFAULT
         logger.error(f"Error in geographic filter: {e}")
         await update.message.reply_text("❌ Error processing geographic filter. Please try again.")
 
+async def parse_natural_date_format(user_input: str) -> tuple[str, str] | None:
+    """Use AI to parse natural date formats into YYYY-MM-DD format."""
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "You are a date parser. Convert user date inputs to YYYY-MM-DD format. Assume current year is 2025 if year not specified. Return ONLY in format: 'YYYY-MM-DD to YYYY-MM-DD' or 'INVALID' if cannot parse."
+                },
+                {
+                    "role": "user", 
+                    "content": f"Parse this date range: {user_input}"
+                }
+            ],
+            max_tokens=50,
+            temperature=0
+        )
+        
+        ai_response = response.choices[0].message.content.strip()
+        
+        if ai_response == "INVALID":
+            return None
+            
+        # Try to extract the dates from AI response
+        import re
+        date_pattern = r'(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})'
+        match = re.match(date_pattern, ai_response)
+        
+        if match:
+            return match.group(1), match.group(2)
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error parsing natural date format: {e}")
+        return None
+
+async def handle_custom_timeframe_input(update: Update, context: ContextTypes.DEFAULT_TYPE, user_input: str) -> None:
+    """Handle custom time frame input from user."""
+    import re
+    from datetime import datetime
+    
+    try:
+        # First try standard format: YYYY-MM-DD to YYYY-MM-DD
+        date_pattern = r'(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})'
+        match = re.match(date_pattern, user_input.strip())
+        
+        if match:
+            start_date_str = match.group(1)
+            end_date_str = match.group(2)
+        else:
+            # Try AI-powered natural date parsing
+            parsed_dates = await parse_natural_date_format(user_input)
+            if parsed_dates:
+                start_date_str, end_date_str = parsed_dates
+                await update.message.reply_text(
+                    f"🤖 **AI Interpreted:** `{user_input}` → `{start_date_str} to {end_date_str}`\n\n"
+                    "✅ Processing your custom date range...",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                "❌ **Invalid date format**\n\n"
+                "Please use format: `YYYY-MM-DD to YYYY-MM-DD`\n\n"
+                "**Example:** `2024-12-01 to 2025-03-31`\n\n"
+                "Try again or use /timeframe to select a predefined period.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        start_date_str = match.group(1)
+        end_date_str = match.group(2)
+        
+        # Validate dates
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+            
+            # Check date range validity
+            today = datetime.now().date()
+            
+            # Don't allow future dates beyond today
+            if end_date.date() > today:
+                await update.message.reply_text(
+                    f"❌ **Future dates not allowed**\n\n"
+                    f"**Available data:** Any historical date to {today.strftime('%Y-%m-%d')} (today)\n"
+                    f"**Your range:** {start_date_str} to {end_date_str}\n\n"
+                    "Please adjust your dates and try again.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            if start_date >= end_date:
+                await update.message.reply_text(
+                    "❌ **Invalid date range**\n\n"
+                    "Start date must be before end date.\n\n"
+                    "Please try again.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            # Calculate period length
+            days_diff = (end_date - start_date).days
+            
+            # Store custom time frame
+            custom_timeframe = {
+                "start_time": start_date_str,
+                "end_time": end_date_str,
+                "label": "📅 Custom Range",
+                "description": f"Custom period ({start_date_str} to {end_date_str}, {days_diff} days)"
+            }
+            
+            context.user_data['selected_timeframe'] = custom_timeframe
+            
+            await update.message.reply_text(
+                f"✅ **CUSTOM TIME PERIOD SET**\n\n"
+                f"**📅 Custom Range**\n"
+                f"*{custom_timeframe['description']}*\n\n"
+                f"**Period:** {start_date_str} to {end_date_str}\n"
+                f"**Duration:** {days_diff} days\n\n"
+                "✅ **Time frame set!** Now you can:\n"
+                "• Use any function and it will use this time period\n"
+                "• Type a query naturally\n"
+                "• Use /selectfunction to choose a specific function\n"
+                "• Use /timeframe to change the time period",
+                parse_mode='Markdown'
+            )
+            
+        except ValueError:
+            await update.message.reply_text(
+                "❌ **Invalid date format**\n\n"
+                "Please use valid dates in format: `YYYY-MM-DD to YYYY-MM-DD`\n\n"
+                "**Example:** `2024-12-01 to 2025-03-31`",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        logger.error(f"Error processing custom time frame: {e}")
+        await update.message.reply_text(
+            "❌ **Error processing custom time frame**\n\n"
+            "Please try again or use /timeframe to select a predefined period.",
+            parse_mode='Markdown'
+        )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming text messages."""
     user_query = update.message.text
@@ -1918,6 +2145,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_geographic_filter(update, context, operator_name, user_query, "continent")
         return
     
+    # Check if user is entering custom time frame
+    if context.user_data.get('awaiting_custom_timeframe'):
+        context.user_data.pop('awaiting_custom_timeframe')
+        await handle_custom_timeframe_input(update, context, user_query)
+        return
+    
     # TEMPORARY: Direct test of Function 9
     if user_query.lower() == "test function 9":
         logger.info("🧪 DIRECT FUNCTION 9 TEST ACTIVATED")
@@ -1925,12 +2158,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         try:
             # Call Function 9 directly with test mode
-            result = await call_supabase_function("get_operators_by_multi_destinations", {
+            selected_timeframe = context.user_data.get('selected_timeframe')
+            function_params = {
                 "test_mode": True,
-                "destination_codes": ["HKG", "JFK"],
-                "start_time": "2024-04-01",
-                "end_time": "2025-05-31"
-            })
+                "destination_codes": ["HKG", "JFK"]
+            }
+            result = await call_supabase_function("get_operators_by_multi_destinations", function_params, selected_timeframe)
             
             await update.message.reply_text(f"🔬 Function 9 Direct Test Result:\n{result}")
             return
@@ -1976,7 +2209,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 # SMART PRESET SYSTEM: Check compatibility before forcing function
                 
                 # Step 1: Analyze what the query naturally should be
-                natural_analysis = await analyze_query_with_openai(user_query)
+                selected_timeframe = context.user_data.get('selected_timeframe')
+                natural_analysis = await analyze_query_with_openai(user_query, selected_timeframe)
                 
                 if not natural_analysis:
                     await update.message.reply_text(
@@ -2020,7 +2254,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     return
             
             # Analyze query with OpenAI for other functions
-            analysis = await analyze_query_with_openai(user_query)
+            # Get user's selected time frame or use default
+            selected_timeframe = context.user_data.get('selected_timeframe')
+            analysis = await analyze_query_with_openai(user_query, selected_timeframe)
         
         if not analysis:
             await update.message.reply_text(
@@ -2031,10 +2267,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Debug: Log the analysis result
         logger.info(f"OpenAI analysis: {analysis}")
         
-        # Call Supabase function
+        # Call Supabase function with selected time frame
+        selected_timeframe = context.user_data.get('selected_timeframe')
         results = await call_supabase_function(
             analysis["function_name"], 
-            analysis["parameters"]
+            analysis["parameters"],
+            selected_timeframe
         )
         
         # Debug: Log the results
@@ -2130,8 +2368,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_operator_search(update: Update, context: ContextTypes.DEFAULT_TYPE, search_query: str) -> None:
     """Handle operator search with clickable button interface."""
     try:
-        # Call Function 8 in search mode
-        results = await call_supabase_function("get_operator_details", {"search_query": search_query})
+        # Call Function 8 in search mode with selected timeframe
+        selected_timeframe = context.user_data.get('selected_timeframe')
+        function_params = {"search_query": search_query}
+        results = await call_supabase_function("get_operator_details", function_params, selected_timeframe)
         
         if results.get("result_type") == "search_results":
             # Multiple operators found - show selection buttons
@@ -2233,8 +2473,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             
             logger.info(f"DEBUG: Original operator: {operator_name}, Cleaned: {cleaned_operator_name}")
             
-            # Get full operator details using Function 8
-            results = await call_supabase_function("get_operator_details", {"operator_selection": cleaned_operator_name})
+            # Get full operator details using Function 8 with selected timeframe
+            selected_timeframe = context.user_data.get('selected_timeframe')
+            function_params = {"operator_selection": cleaned_operator_name}
+            results = await call_supabase_function("get_operator_details", function_params, selected_timeframe)
             
             # Format and display results
             response_text = format_operator_details(results)
@@ -2285,9 +2527,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             if pending_query:
                 # Re-analyze with the correct function
                 if new_function == 'get_operators_by_geographic_locations':
-                    analysis = await analyze_geographic_query_with_openai(pending_query)
+                    selected_timeframe = context.user_data.get('selected_timeframe')
+                    analysis = await analyze_geographic_query_with_openai(pending_query, selected_timeframe)
                 else:
-                    analysis = await analyze_query_with_openai(pending_query)
+                    selected_timeframe = context.user_data.get('selected_timeframe')
+                    analysis = await analyze_query_with_openai(pending_query, selected_timeframe)
                 
                 if analysis:
                     # Set the new function selection
@@ -2345,9 +2589,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             if pending_query:
                 # Force execute with selected function (may give unexpected results)
                 if selected_function == 'get_operators_by_geographic_locations':
-                    analysis = await analyze_geographic_query_with_openai(pending_query)
+                    selected_timeframe = context.user_data.get('selected_timeframe')
+                    analysis = await analyze_geographic_query_with_openai(pending_query, selected_timeframe)
                 else:
-                    analysis = await analyze_query_with_openai(pending_query)
+                    selected_timeframe = context.user_data.get('selected_timeframe')
+                    analysis = await analyze_query_with_openai(pending_query, selected_timeframe)
                 
                 if analysis:
                     # Set the function selection
@@ -2397,7 +2643,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 context.user_data.pop('selected_function', None)
                 
                 # Re-analyze without preset function
-                analysis = await analyze_query_with_openai(pending_query)
+                selected_timeframe = context.user_data.get('selected_timeframe')
+                analysis = await analyze_query_with_openai(pending_query, selected_timeframe)
                 
                 if analysis:
                     # Clear selection for auto-detection
@@ -2597,6 +2844,60 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             except Exception as e:
                 logger.error(f"❌ Failed to unpin message: {e}")
                 await query.message.reply_text("❌ Failed to unpin menu. You can still use /selectfunction to show the menu again.")
+            await query.answer()
+        
+        # Time Frame Selection Handlers
+        elif callback_data.startswith("timeframe_"):
+            timeframe_key = callback_data.replace("timeframe_", "")
+            
+            if timeframe_key == "custom":
+                # Handle custom time frame input
+                await query.edit_message_text(
+                    "📅 **CUSTOM TIME RANGE**\n\n"
+                    "Enter your custom date range in format:\n"
+                    "`YYYY-MM-DD to YYYY-MM-DD`\n\n"
+                    "**Examples:**\n"
+                    "• `2024-12-01 to 2025-03-31`\n"
+                    "• `2025-01-15 to 2025-05-31`\n\n"
+                    "💡 **Available data:** 2024-04-01 to latest movement date\n\n"
+                    "👇 **Type your date range:**",
+                    parse_mode='Markdown'
+                )
+                # Set user state for custom date input
+                context.user_data['awaiting_custom_timeframe'] = True
+            else:
+                # Handle predefined time frames
+                try:
+                    time_frames = await get_dynamic_time_frames()
+                    selected_frame = time_frames.get(timeframe_key)
+                    
+                    if selected_frame:
+                        # Store selected time frame
+                        context.user_data['selected_timeframe'] = selected_frame
+                        
+                        await query.edit_message_text(
+                            f"✅ **TIME PERIOD SELECTED**\n\n"
+                            f"**{selected_frame['label']}**\n"
+                            f"*{selected_frame['description']}*\n\n"
+                            f"📅 **Period:** {selected_frame['start_time']} to {selected_frame['end_time']}\n\n"
+                            "✅ **Time frame set!** Now you can:\n"
+                            "• Use any function and it will use this time period\n"
+                            "• Type a query naturally\n"
+                            "• Use /selectfunction to choose a specific function\n"
+                            "• Use /timeframe to change the time period",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await query.edit_message_text("❌ Invalid time frame selection.")
+                        
+                except Exception as e:
+                    logger.error(f"Error handling time frame selection: {e}")
+                    await query.edit_message_text("❌ Error processing time frame selection.")
+            
+            await query.answer()
+        
+        elif callback_data == "cancel_timeframe":
+            await query.edit_message_text("❌ Time frame selection cancelled.")
             await query.answer()
         
         # ENHANCED: Geographic filtering handlers for Function 8
@@ -2899,6 +3200,7 @@ def main() -> None:
     application.add_handler(CommandHandler("examples", examples_command))
     application.add_handler(CommandHandler("functions", functions_command))
     application.add_handler(CommandHandler("selectfunction", selectfunction_command))
+    application.add_handler(CommandHandler("timeframe", timeframe_command))
     application.add_handler(CallbackQueryHandler(handle_callback_query))  # Handle button clicks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
