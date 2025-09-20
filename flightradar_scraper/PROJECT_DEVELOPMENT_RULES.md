@@ -25,6 +25,41 @@
 
 ---
 
+## 🎯 **DATA ACCURACY STANDARDS (HIGHEST PRIORITY)**
+
+### **Core Principle: ACCURACY OVER SPEED**
+**"We would rather increase waiting time than sacrifice data accuracy"**
+
+All functions must prioritize complete and accurate data over performance optimizations. Users prefer to wait longer for complete results rather than receive fast but incomplete data.
+
+### **Mandatory Data Accuracy Rules:**
+1. **No Data Loss Through Filtering**
+   - ❌ NEVER use `HAVING COUNT(*) > 1` (eliminates single-flight operations)
+   - ❌ NEVER reduce LIMIT below complete coverage needs
+   - ✅ ALWAYS include ALL operators, aircraft, and routes
+   - ✅ ALWAYS use `HAVING COUNT(*) >= 1` or remove HAVING clause
+
+2. **Complete Aircraft Classification**
+   - ✅ ALWAYS use complete freighter detection logic (FREIGHTER, CARGO, BCF, BDSF, SF, -F, F patterns)
+   - ✅ ALWAYS include exclusions (FK, TANKER, VIP, FIRST, FLEX patterns)
+   - ❌ NEVER use simplified detection that misses aircraft types
+
+3. **Timeout Management Strategy**
+   - ✅ Alert user when data exceeds 10,000 records
+   - ✅ Suggest specific time frame reductions
+   - ✅ Maintain full accuracy within suggested time frames
+   - ❌ NEVER silently truncate results
+
+4. **Complete Coverage Requirements**
+   - ✅ ALL operators serving routes/destinations
+   - ✅ ALL aircraft types and registrations
+   - ✅ ALL geographic locations matching criteria
+   - ✅ Exact time range adherence
+
+**📋 See `DATA_ACCURACY_STANDARDS.md` for complete requirements**
+
+---
+
 ## 🔐 **REQUIRED ENVIRONMENT SETTINGS**
 
 ### **1. Core Environment Variables (MANDATORY)**

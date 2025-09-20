@@ -193,7 +193,7 @@ serve(async (req: Request) => {
           a.type, a.aircraft_details, a.registration,
           fm.destination_code, fm.destination_name, fm.dest_country, fm.dest_continent,
           aircraft_category, fm.location_match
-        HAVING COUNT(*) >= 2  -- Filter out single-flight operations for performance
+        HAVING COUNT(*) >= 1  -- Include all operations for complete accuracy
         ORDER BY a.operator, aircraft_category, frequency DESC
         LIMIT 10000;
       `
@@ -206,6 +206,34 @@ serve(async (req: Request) => {
       console.log(`⏱️ Query executed in ${queryTime}ms`)
 
       console.log("📊 Raw query results:", queryResult.rows?.length || 0, "records")
+
+      // Check if we hit the limit and suggest time frame adjustment
+      if (queryResult.rows && queryResult.rows.length >= 10000) {
+        console.log("⚠️ Hit 10,000 record limit - may have incomplete data")
+        return new Response(
+          JSON.stringify({ 
+            error: 'Too many results to process accurately',
+            message: 'The query returned too many results (10,000+ records) which may cause incomplete data or timeouts.',
+            suggestion: 'Please narrow your search by using a shorter time frame:',
+            recommended_time_frames: [
+              'Past 3 months: Reduce time range to last 3 months for more focused analysis',
+              'Past 6 months: Use 6-month window for seasonal analysis',
+              'Specific year: Choose a specific year (e.g., 2024-01-01 to 2024-12-31)',
+              'Peak season: Focus on specific busy periods (e.g., summer or winter season)'
+            ],
+            search_criteria: {
+              first_location: { type: first_location_type, value: first_location_value },
+              second_location: { type: second_location_type, value: second_location_value },
+              current_time_range: { start_time, end_time }
+            },
+            data_accuracy_note: 'We prioritize complete data accuracy over speed. A shorter time frame will ensure you get all operators without missing any important data.'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
 
       if (!queryResult.rows || queryResult.rows.length === 0) {
         console.log("❌ No data found")

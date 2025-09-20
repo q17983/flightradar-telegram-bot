@@ -215,7 +215,31 @@ async function searchOperatorsByAircraftAndDestinations(
         COUNT(DISTINCT a.registration) as matching_fleet_size,
         COUNT(DISTINCT m.destination_code) as destination_count,
         COUNT(*) as total_flights,
-        ROUND(COUNT(*) / 12.0, 1) as avg_monthly_flights
+        ROUND(COUNT(*) / 12.0, 1) as avg_monthly_flights,
+        CASE 
+          WHEN (
+            -- Explicit freighter terms
+            UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+            OR UPPER(a.aircraft_details) LIKE '%CARGO%'
+            OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
+            OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
+            OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
+            OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+            
+            -- Broad F pattern for comprehensive coverage
+            OR UPPER(a.aircraft_details) LIKE '%F%'
+          )
+          -- Exclude military and passenger patterns
+          AND NOT (
+            UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
+            OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
+            OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
+            OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
+            OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
+          )
+          THEN 'Freighter'
+          ELSE 'Passenger'
+        END as aircraft_category
     FROM aircraft a
     JOIN movements m ON a.registration = m.registration
     LEFT JOIN airports_geography ag ON m.destination_code = ag.iata_code
@@ -228,9 +252,11 @@ async function searchOperatorsByAircraftAndDestinations(
       )
       AND m.scheduled_departure >= $5::date
       AND m.scheduled_departure <= $6::date
-    GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code
+      AND a.operator IS NOT NULL
+      AND a.operator != ''
+    GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, aircraft_category
     ORDER BY total_flights DESC
-    LIMIT 50;  -- Limit results to prevent timeout
+    LIMIT 10000;  -- Increased for complete coverage
   `
   
   console.log("Executing search with parameters:", {
@@ -252,6 +278,34 @@ async function searchOperatorsByAircraftAndDestinations(
   ])
   
   console.log(`Search query returned ${searchResult.rows.length} operators`)
+  
+  // Check if we hit the limit and suggest time frame adjustment
+  if (searchResult.rows && searchResult.rows.length >= 10000) {
+    console.log("⚠️ Hit 10,000 record limit - may have incomplete data")
+    return new Response(
+      JSON.stringify({ 
+        error: 'Too many results to process accurately',
+        message: 'The query returned too many results (10,000+ records) which may cause incomplete data or timeouts.',
+        suggestion: 'Please narrow your search by using a shorter time frame:',
+        recommended_time_frames: [
+          'Past 3 months: Reduce time range to last 3 months for more focused analysis',
+          'Past 6 months: Use 6-month window for seasonal analysis',
+          'Specific year: Choose a specific year (e.g., 2024-01-01 to 2024-12-31)',
+          'Peak season: Focus on specific busy periods (e.g., summer or winter season)'
+        ],
+        search_criteria: {
+          aircraft_types: aircraftTypes,
+          destinations: destinations,
+          current_time_range: { start_time: startTime, end_time: endTime }
+        },
+        data_accuracy_note: 'We prioritize complete data accuracy over speed. A shorter time frame will ensure you get all operators without missing any important data.'
+      }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
   
   if (searchResult.rows.length === 0) {
     console.log("No operators found for search criteria")
