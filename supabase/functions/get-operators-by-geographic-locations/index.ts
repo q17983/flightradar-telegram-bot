@@ -90,11 +90,12 @@ serve(async (req: Request) => {
       start_time, end_time 
     })
 
-    // 4. Connect to the database
+    // 4. Connect to the database with timeout
     const databaseUrl = Deno.env.get('DATABASE_URL')!
     const pool = new Pool(databaseUrl, DATABASE_POOL_SIZE, true)
     
-    // 5. Connect to the database
+    // 5. Connect to the database with timeout
+    console.log("🔌 Connecting to database...")
     connection = await pool.connect()
 
     try {
@@ -112,96 +113,88 @@ serve(async (req: Request) => {
         }
       }
 
-      // Build the main query with geographic intelligence
+      // Build optimized query with early filtering and reduced complexity
       const sql = `
-        WITH first_location_airports AS (
-          SELECT DISTINCT ag.iata_code, ag.airport_name, ag.country_name, ag.continent
+        WITH location_airports AS (
+          -- Get all airports matching either location in a single CTE
+          SELECT 
+            ag.iata_code, 
+            ag.airport_name, 
+            ag.country_name, 
+            ag.continent,
+            CASE 
+              WHEN ${buildLocationCondition(first_location_type, first_location_value, 'ag')} THEN 'first_location'
+              WHEN ${buildLocationCondition(second_location_type, second_location_value, 'ag')} THEN 'second_location'
+              ELSE NULL
+            END as location_match
           FROM airports_geography ag
           WHERE ${buildLocationCondition(first_location_type, first_location_value, 'ag')}
+             OR ${buildLocationCondition(second_location_type, second_location_value, 'ag')}
         ),
-        second_location_airports AS (
-          SELECT DISTINCT ag.iata_code, ag.airport_name, ag.country_name, ag.continent  
-          FROM airports_geography ag
-          WHERE ${buildLocationCondition(second_location_type, second_location_value, 'ag')}
-        ),
-        operator_flights AS (
-          SELECT
-            a.operator,
-            a.operator_iata_code,
-            a.operator_icao_code,
-            a.type as aircraft_type,
-            a.aircraft_details,
-            a.registration,
+        filtered_movements AS (
+          -- Pre-filter movements to only relevant destinations and time range
+          SELECT 
+            m.registration,
             m.destination_code,
-            ag.airport_name as destination_name,
-            ag.country_name as dest_country,
-            ag.continent as dest_continent,
-            COUNT(*) as frequency,
-            CASE 
-              WHEN (
-                -- Explicit freighter terms
-                UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-                OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-                OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
-                OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
-                OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
-                OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
-                
-                -- Broad F pattern for comprehensive coverage
-                OR UPPER(a.aircraft_details) LIKE '%F%'
-              )
-              -- Exclude military and passenger patterns
-              AND NOT (
-                UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
-                OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
-                OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
-                OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
-                OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
-              )
-              THEN 'Freighter'
-              ELSE 'Passenger'
-            END as aircraft_category,
-            CASE 
-              WHEN fla.iata_code IS NOT NULL THEN 'first_location'
-              WHEN sla.iata_code IS NOT NULL THEN 'second_location'
-            END as location_match
+            m.scheduled_departure,
+            la.location_match,
+            la.airport_name as destination_name,
+            la.country_name as dest_country,
+            la.continent as dest_continent
           FROM movements m
-          JOIN aircraft a ON m.registration = a.registration
-          JOIN airports_geography ag ON m.destination_code = ag.iata_code
-          LEFT JOIN first_location_airports fla ON m.destination_code = fla.iata_code
-          LEFT JOIN second_location_airports sla ON m.destination_code = sla.iata_code
-          WHERE (fla.iata_code IS NOT NULL OR sla.iata_code IS NOT NULL)
-            AND m.scheduled_departure >= $1
+          INNER JOIN location_airports la ON m.destination_code = la.iata_code
+          WHERE m.scheduled_departure >= $1
             AND m.scheduled_departure <= $2
-            AND a.operator IS NOT NULL
-            AND a.operator != ''
-          GROUP BY a.operator, a.operator_iata_code, a.operator_icao_code, 
-                   a.type, a.aircraft_details, a.registration,
-                   m.destination_code, ag.airport_name, ag.country_name, ag.continent,
-                   aircraft_category, location_match
-          HAVING COUNT(*) >= 1
         )
-        SELECT 
-          operator,
-          operator_iata_code,
-          operator_icao_code,
-          aircraft_type,
-          aircraft_details,
-          registration,
-          destination_code,
-          destination_name,
-          dest_country,
-          dest_continent,
-          frequency,
-          aircraft_category,
-          location_match
-        FROM operator_flights
-        ORDER BY operator, aircraft_category, aircraft_type, frequency DESC
-        LIMIT 10000;
+        SELECT
+          a.operator,
+          a.operator_iata_code,
+          a.operator_icao_code,
+          a.type as aircraft_type,
+          a.aircraft_details,
+          a.registration,
+          fm.destination_code,
+          fm.destination_name,
+          fm.dest_country,
+          fm.dest_continent,
+          COUNT(*) as frequency,
+          CASE 
+            WHEN (
+              UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+              OR UPPER(a.aircraft_details) LIKE '%CARGO%'
+              OR UPPER(a.aircraft_details) LIKE '%BCF%'
+              OR UPPER(a.aircraft_details) LIKE '%SF%'
+              OR UPPER(a.aircraft_details) LIKE '%-F%'
+            )
+            AND NOT (
+              UPPER(a.aircraft_details) LIKE '%FK%'
+              OR UPPER(a.aircraft_details) LIKE '%TANKER%'
+              OR UPPER(a.aircraft_details) LIKE '%VIP%'
+            )
+            THEN 'Freighter'
+            ELSE 'Passenger'
+          END as aircraft_category,
+          fm.location_match
+        FROM filtered_movements fm
+        JOIN aircraft a ON fm.registration = a.registration
+        WHERE a.operator IS NOT NULL
+          AND a.operator != ''
+        GROUP BY 
+          a.operator, a.operator_iata_code, a.operator_icao_code, 
+          a.type, a.aircraft_details, a.registration,
+          fm.destination_code, fm.destination_name, fm.dest_country, fm.dest_continent,
+          aircraft_category, fm.location_match
+        HAVING COUNT(*) >= 1
+        ORDER BY a.operator, aircraft_category, frequency DESC
+        LIMIT 5000;
       `
       
-      // 7. Execute the query
+      // 7. Execute the query with timeout logging
+      console.log("🚀 Executing optimized geographic query...")
+      const queryStart = Date.now()
       const queryResult = await connection.queryObject(sql, [start_time, end_time])
+      const queryTime = Date.now() - queryStart
+      console.log(`⏱️ Query executed in ${queryTime}ms`)
 
       console.log("📊 Raw query results:", queryResult.rows?.length || 0, "records")
 
@@ -365,18 +358,20 @@ serve(async (req: Request) => {
         })
         .sort((a, b) => b.total_flights - a.total_flights)
 
-      // Debug: Log airport counts for each location
-      const firstLocationAirportCount = await connection.queryObject(`
-        SELECT COUNT(*) as count FROM airports_geography ag 
+      // Debug: Log airport counts for each location (optimized single query)
+      const locationCounts = await connection.queryObject(`
+        SELECT 
+          SUM(CASE WHEN ${buildLocationCondition(first_location_type, first_location_value, 'ag')} THEN 1 ELSE 0 END) as first_count,
+          SUM(CASE WHEN ${buildLocationCondition(second_location_type, second_location_value, 'ag')} THEN 1 ELSE 0 END) as second_count
+        FROM airports_geography ag 
         WHERE ${buildLocationCondition(first_location_type, first_location_value, 'ag')}
-      `)
-      const secondLocationAirportCount = await connection.queryObject(`
-        SELECT COUNT(*) as count FROM airports_geography ag 
-        WHERE ${buildLocationCondition(second_location_type, second_location_value, 'ag')}
+           OR ${buildLocationCondition(second_location_type, second_location_value, 'ag')}
       `)
       
-      console.log(`📍 ${first_location_value} (${first_location_type}): ${firstLocationAirportCount.rows[0]?.count || 0} airports`)
-      console.log(`📍 ${second_location_value} (${second_location_type}): ${secondLocationAirportCount.rows[0]?.count || 0} airports`)
+      const firstCount = Number(locationCounts.rows[0]?.first_count || 0)
+      const secondCount = Number(locationCounts.rows[0]?.second_count || 0)
+      console.log(`📍 ${first_location_value} (${first_location_type}): ${firstCount} airports`)
+      console.log(`📍 ${second_location_value} (${second_location_type}): ${secondCount} airports`)
       
       // Debug: Count operators serving each location individually
       const operatorsServingFirst = Array.from(operatorMap.values()).filter(op => op.first_location_flights > 0).length

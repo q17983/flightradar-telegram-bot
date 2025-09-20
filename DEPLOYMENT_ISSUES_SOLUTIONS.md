@@ -198,3 +198,4 @@ async def send_large_message(message, text: str, reply_markup=None):
 ---
 
 *This reference document should be consulted before any future development to avoid repeating these issues.*
+

@@ -29,3 +29,4 @@ FROM aircraft
 WHERE type IN ('A330', 'B747', 'B757', 'B767', 'B777', 'IL76', 'B737')
 GROUP BY type
 ORDER BY count DESC;
+
