@@ -652,6 +652,140 @@ git push --force origin main
 
 ---
 
+## 🔥 **CRITICAL DEBUGGING LESSONS LEARNED**
+
+### **The Icelandair Geographic Filtering Crisis - September 20, 2025**
+
+**Crisis Summary:** Extended debugging session to fix geographic filtering that worked at 12:09 but broke afterward. Root cause: operator name corruption + missing cleaning logic in geographic filter code path.
+
+### **🎯 MANDATORY DEBUGGING PROTOCOL**
+
+When encountering regressions or mysterious failures:
+
+#### **Step 1: SYSTEMATIC COMPARISON (ALWAYS DO FIRST)**
+```bash
+# Compare exact code differences between working vs broken versions
+git show WORKING_COMMIT:file.ext | diff - CURRENT_FILE
+git log --oneline WORKING_COMMIT..HEAD  # Show all changes since working version
+```
+
+#### **Step 2: IDENTIFY ALL CODE PATHS**
+- ❌ **CRITICAL MISTAKE:** Fixing issue in one code path but missing others
+- ✅ **SOLUTION:** Map ALL functions that handle the same data type
+- **Example:** Operator name used in both `handle_callback_query` AND `handle_geographic_filter`
+
+#### **Step 3: TRACE DATA FLOW**
+```
+Source → Processing → Transformation → Destination
+- Where does data originate? (Database, API, user input)
+- What transformations happen? (Encoding, cleaning, validation)
+- Which functions handle the same data differently?
+```
+
+#### **Step 4: VERIFY ASSUMPTIONS**
+- ❌ **Don't assume:** "Database contains corrupted data"
+- ✅ **Verify:** Check actual database content vs processed data
+- ❌ **Don't assume:** "Error message indicates real problem"
+- ✅ **Verify:** Add detailed logging to see actual data flow
+
+### **🚨 IMMEDIATE RED FLAGS**
+
+**Stop and investigate immediately when you see:**
+- ❌ Generic error messages (`"Message is too long"`, `"Error processing"`)
+- ❌ Same functionality works in one place, fails in another
+- ❌ Data corruption patterns (special characters, encoding issues)
+- ❌ Missing functions being called without obvious errors
+- ❌ Field name mismatches between function responses
+
+### **🛡️ PREVENTION RULES**
+
+#### **A. CODE PATH CONSISTENCY**
+```python
+# ❌ BAD: Duplicate logic in multiple places
+def handle_callback_query():
+    if "icel&air" in name.lower():
+        name = "Icelandair"  # Only fixes callback path!
+
+def handle_geographic_filter():
+    # Missing the same cleaning logic!
+```
+
+```python
+# ✅ GOOD: Centralized data processing
+def clean_operator_name(name: str) -> str:
+    """Centralized operator name cleaning logic."""
+    if "icel&air" in name.lower():
+        return "Icelandair"
+    return name
+
+# Use in ALL code paths that handle operator names
+```
+
+#### **B. ATOMIC COMMITS**
+- ✅ **One logical change per commit** (easier to debug/revert)
+- ❌ **Multiple unrelated changes** (hard to isolate issues)
+- **Example:** Don't combine function creation + message handling changes
+
+#### **C. DATA INTEGRITY CHECKS**
+```python
+# Add validation at entry points
+def handle_geographic_filter(operator_name: str, ...):
+    # Validate and clean data immediately
+    cleaned_name = clean_operator_name(operator_name)
+    logger.debug(f"Original: {operator_name}, Cleaned: {cleaned_name}")
+```
+
+#### **D. EXPLICIT ERROR HANDLING**
+```python
+# ❌ BAD: Generic error messages
+except Exception as e:
+    logger.error(f"Error in geographic filter: {e}")
+
+# ✅ GOOD: Specific, actionable error messages  
+except Exception as e:
+    logger.error(f"Geographic filter failed for operator '{operator_name}' "
+                f"in {geography_input} ({filter_type}): {e}")
+    logger.error(f"Debug: Function 8 parameters were {parameters}")
+```
+
+### **📋 MANDATORY CODE REVIEW CHECKLIST**
+
+Before deploying ANY changes that modify data processing:
+
+- [ ] **All Code Paths Updated:** Are ALL functions that handle this data type updated consistently?
+- [ ] **Data Transformations Centralized:** Is the logic in a shared utility function?
+- [ ] **Error Messages Specific:** Can someone debug this from the error message alone?
+- [ ] **Atomic Changes:** Can this commit be easily reverted if it causes issues?
+- [ ] **Debug Information Added:** Is there enough logging to troubleshoot issues?
+- [ ] **Integration Testing:** Have you tested the complete user flow, not just the function?
+
+### **🎯 TECHNICAL DEBT PREVENTION**
+
+#### **Immediate Actions for Any Data Processing Change:**
+1. **Create shared utilities** for common data transformations
+2. **Standardize field names** across all function responses
+3. **Add data validation** at all function entry points
+4. **Replace generic errors** with specific, actionable messages
+5. **Add integration tests** for complete user workflows
+
+#### **Architecture Improvements:**
+1. **Document data flow paths** - map all transformations
+2. **Consistent logging format** across all functions
+3. **Error handling patterns** - define standard approaches
+4. **Field naming conventions** - prevent mismatches like `destinations` vs `geographic_destinations`
+
+### **✅ SUCCESS FACTORS**
+
+**What worked in the Icelandair crisis:**
+- ✅ Detailed Supabase function logs (crucial for diagnosis)
+- ✅ User's hypothesis testing (`send_large_message()` theory)
+- ✅ Systematic version comparison methodology
+- ✅ Persistent debugging until root cause found
+
+**Key Insight:** Combination of detailed logging + systematic comparison solved the mystery.
+
+---
+
 **This document represents the complete knowledge base for FlightRadar Scraper development. Follow these rules religiously to ensure smooth, stable, and effective development.**
 
 **Last Updated:** September 20, 2025  

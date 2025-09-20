@@ -496,6 +496,13 @@ def format_geographic_operator_results(results: dict) -> dict:
     header += f"• {summary.get('freighter_flights', 0):,} freighter ({round(summary.get('freighter_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n"
     header += f"• {summary.get('passenger_flights', 0):,} passenger ({round(summary.get('passenger_flights', 0) / max(summary.get('total_flights', 1), 1) * 100)}%)\n\n"
     
+    # Add limit warning if present
+    limit_warning = results.get("limit_warning")
+    if limit_warning:
+        header += f"⚠️ **DATA LIMIT NOTICE:**\n"
+        header += f"• {limit_warning.get('message', 'Showing results from first 50,000 records.')}\n"
+        header += f"• {limit_warning.get('suggestion', 'Consider narrowing your search for complete coverage.')}\n\n"
+    
     messages = []
     
     # Message 1: Summary only
