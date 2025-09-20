@@ -282,23 +282,45 @@ def preprocess_locations(query: str) -> dict:
     locations = []
     words = corrected_query.split()
     
-    # Simple location detection (can be enhanced)
-    continent_codes = ["asia", "north america", "europe", "south america", "africa", "oceania", "antarctica"]
-    airport_pattern = r'\b[A-Z]{3}\b'  # 3-letter codes
+    # Enhanced location detection with both codes and names
+    continent_codes_map = {
+        # Continent codes
+        "as": ("AS", "continent"), "na": ("NA", "continent"), "eu": ("EU", "continent"),
+        "sa": ("SA", "continent"), "af": ("AF", "continent"), "oc": ("OC", "continent"), "an": ("AN", "continent"),
+        # Continent names
+        "asia": ("AS", "continent"), "north america": ("NA", "continent"), "europe": ("EU", "continent"),
+        "south america": ("SA", "continent"), "africa": ("AF", "continent"), "oceania": ("OC", "continent"), "antarctica": ("AN", "continent")
+    }
+    
+    # Common country names (can be expanded)
+    country_names = ["china", "japan", "germany", "thailand", "korea", "south korea", "taiwan"]
     
     for word in words:
+        word_lower = word.lower()
         word_upper = word.upper()
-        if len(word_upper) == 3 and word_upper.isalpha():
+        
+        # Check continent codes/names first
+        if word_lower in continent_codes_map:
+            code, type_name = continent_codes_map[word_lower]
+            locations.append((code, type_name))
+        # Check if it's a 3-letter airport code
+        elif len(word_upper) == 3 and word_upper.isalpha() and word_lower not in continent_codes_map:
             locations.append((word_upper, "airport"))
-        elif word.lower() in continent_codes:
-            locations.append((word, "continent"))
+        # Check if it's a country name
+        elif word_lower in country_names:
+            locations.append((word, "country"))
     
-    return {
+    result = {
         "original_query": query,
         "corrected_query": corrected_query,
         "locations": locations,
         "location_types": [loc[1] for loc in locations]
     }
+    
+    # Debug logging
+    logger.info(f"🔍 Location preprocessing: '{query}' → {locations} → types: {result['location_types']}")
+    
+    return result
 
 def check_function_compatibility(selected_function: str, natural_function: str, processed_query: dict) -> dict:
     """Check compatibility between selected function and natural query analysis."""
@@ -326,7 +348,7 @@ def check_function_compatibility(selected_function: str, natural_function: str, 
     
     selected_rule = compatibility_rules.get(selected_function, {"compatible": False, "reason": "Unknown function"})
     
-    return {
+    result = {
         "is_compatible": selected_rule["compatible"],
         "selected_function": selected_function,
         "natural_function": natural_function,
@@ -334,6 +356,11 @@ def check_function_compatibility(selected_function: str, natural_function: str, 
         "location_types": location_types,
         "suggestion": "switch" if not selected_rule["compatible"] else "proceed"
     }
+    
+    # Debug logging
+    logger.info(f"🔍 Compatibility check: {selected_function} vs {natural_function} | Types: {location_types} | Compatible: {result['is_compatible']} | Reason: {selected_rule['reason']}")
+    
+    return result
 
 async def analyze_geographic_query_with_openai(query: str, time_frame: dict = None) -> dict:
     """Analyze user query as geographic query (Function 10) using OpenAI with universal location intelligence."""
