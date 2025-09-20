@@ -1980,7 +1980,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.info(f"Supabase results: {results}")
         
         # Format and send results
-        response_text = format_results_for_telegram_for_telegram(results, analysis["function_name"])
+        response_text = format_results_for_telegram(results, analysis["function_name"])
         
         # Handle Function 9 which returns list of messages
         if analysis["function_name"] == "get_operators_by_multi_destinations" and isinstance(response_text, list):
