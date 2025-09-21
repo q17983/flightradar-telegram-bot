@@ -42,18 +42,10 @@ serve(async (req: Request) => {
           
           -- Rule 2: Dedicated Freighters (Second Priority)
           WHEN (
-            -- Production Freighters
+            -- Production Freighters (F as standalone suffix)
             UPPER(a.aircraft_details) LIKE '%F' 
             OR UPPER(a.aircraft_details) LIKE '%-F'
-            OR UPPER(a.aircraft_details) LIKE '%F2'
-            OR UPPER(a.aircraft_details) LIKE '%F6'
-            OR UPPER(a.aircraft_details) LIKE '%FB'
-            OR UPPER(a.aircraft_details) LIKE '%FG'
-            OR UPPER(a.aircraft_details) LIKE '%FT'
-            OR UPPER(a.aircraft_details) LIKE '%FZ'
-            OR UPPER(a.aircraft_details) LIKE '%FN'
-            OR UPPER(a.aircraft_details) LIKE '%FE'
-            -- Note: Excluded %FH as it's often customer code (e.g., 737-8FH is passenger)
+            -- Note: Multi-letter F patterns (FH, FN, FB, FE, FZ, F2) may be customer codes
             
             -- Converted Freighters
             OR UPPER(a.aircraft_details) LIKE '%(BCF)'
