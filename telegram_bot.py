@@ -566,16 +566,21 @@ async def call_supabase_function(function_name: str, parameters: dict, time_fram
     else:
         return {"error": f"Unknown function: {function_name}"}
     
-    # Use provided time frame or fall back to default
-    if time_frame and "start_time" in time_frame and "end_time" in time_frame:
-        parameters["start_time"] = time_frame["start_time"]
-        parameters["end_time"] = time_frame["end_time"]
-        logger.info(f"🕒 Using time frame: {time_frame['start_time']} to {time_frame['end_time']}")
-    elif "start_time" not in parameters or "end_time" not in parameters:
-        # Only set defaults if not already in parameters
-        parameters["start_time"] = "2024-04-01"
-        parameters["end_time"] = "2025-12-31"
-        logger.info("🕒 Using default time frame: 2024-04-01 to 2025-12-31")
+    # Use provided time frame or fall back to default (skip for functions that don't need time filtering)
+    if "no_time_filter" not in parameters:
+        if time_frame and "start_time" in time_frame and "end_time" in time_frame:
+            parameters["start_time"] = time_frame["start_time"]
+            parameters["end_time"] = time_frame["end_time"]
+            logger.info(f"🕒 Using time frame: {time_frame['start_time']} to {time_frame['end_time']}")
+        elif "start_time" not in parameters or "end_time" not in parameters:
+            # Only set defaults if not already in parameters
+            parameters["start_time"] = "2024-04-01"
+            parameters["end_time"] = "2025-12-31"
+            logger.info("🕒 Using default time frame: 2024-04-01 to 2025-12-31")
+    else:
+        # Remove the no_time_filter flag before sending to function
+        parameters.pop("no_time_filter", None)
+        logger.info("🕒 Skipping time frame (function doesn't use time filtering)")
     
     # Debug: Log the credentials being used
     logger.info(f"Using SUPABASE_URL: {SUPABASE_URL}")
@@ -1199,8 +1204,8 @@ async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAU
     try:
         await update.message.reply_text("🔍 Extracting all aircraft types containing 'F'...")
         
-        # Call the extraction function
-        result = await call_supabase_function("extract-f-aircraft-types", {})
+        # Call the extraction function (no time parameters needed)
+        result = await call_supabase_function("extract-f-aircraft-types", {"no_time_filter": True})
         
         if "error" in result:
             await update.message.reply_text(f"❌ Error: {result['error']}")
@@ -1227,7 +1232,7 @@ async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAU
         if len(result['passenger_classified']) > 20:
             message += f"... and {len(result['passenger_classified']) - 20} more\n"
         
-        await send_large_message(update, message, parse_mode='Markdown')
+        await send_large_message(update, message)
         
     except Exception as e:
         logger.error(f"Error in extract_f_aircraft_command: {e}")
