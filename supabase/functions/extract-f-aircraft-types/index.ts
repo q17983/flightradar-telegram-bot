@@ -59,7 +59,10 @@ serve(async (req: Request) => {
         END as current_classification
       FROM aircraft a
       WHERE a.aircraft_details IS NOT NULL
-        AND UPPER(a.aircraft_details) LIKE '%F%'  -- Contains 'F' anywhere
+        AND (
+          UPPER(a.aircraft_details) LIKE '%F%'  -- Contains 'F' anywhere
+          OR UPPER(a.type) LIKE '%F%'           -- Also check aircraft type
+        )
         AND a.operator IS NOT NULL
         AND a.operator != ''
       GROUP BY a.type, a.aircraft_details
