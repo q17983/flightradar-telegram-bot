@@ -1219,18 +1219,12 @@ async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAU
         message += f"• Currently Passenger: {result['summary']['currently_classified_as_passenger']}\n\n"
         
         message += f"🚛 **CURRENTLY CLASSIFIED AS FREIGHTER ({len(result['freighter_classified'])}):**\n"
-        for item in result['freighter_classified'][:20]:  # Show first 20
-            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:30]:30}` | Count: {item['aircraft_count']}\n"
-        
-        if len(result['freighter_classified']) > 20:
-            message += f"... and {len(result['freighter_classified']) - 20} more\n"
+        for item in result['freighter_classified']:  # Show ALL freighters
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
         
         message += f"\n✈️ **CURRENTLY CLASSIFIED AS PASSENGER ({len(result['passenger_classified'])}):**\n"
-        for item in result['passenger_classified'][:20]:  # Show first 20
-            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:30]:30}` | Count: {item['aircraft_count']}\n"
-        
-        if len(result['passenger_classified']) > 20:
-            message += f"... and {len(result['passenger_classified']) - 20} more\n"
+        for item in result['passenger_classified']:  # Show ALL passengers
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
         
         await send_large_message(update.message, message)
         
