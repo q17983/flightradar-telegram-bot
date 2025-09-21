@@ -1232,7 +1232,7 @@ async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAU
         if len(result['passenger_classified']) > 20:
             message += f"... and {len(result['passenger_classified']) - 20} more\n"
         
-        await send_large_message(update, message)
+        await send_large_message(update.message, message)
         
     except Exception as e:
         logger.error(f"Error in extract_f_aircraft_command: {e}")
