@@ -30,33 +30,62 @@ All functions must prioritize complete and accurate data over performance optimi
 - ✅ **ALWAYS** alert user if data exceeds processing limits
 - ❌ **NEVER** silently truncate operator lists in search results
 
-### **Rule 3: Accurate Aircraft Classification**
-- ✅ **ALWAYS** use complete freighter detection logic:
+### **Rule 3: Accurate Aircraft Classification (GEMINI 2.5 PRO VALIDATED)**
+- ✅ **ALWAYS** use hierarchical freighter detection logic:
   ```sql
   CASE 
+    -- Rule 1: VIP/Corporate (Highest Priority)
+    WHEN UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+    THEN 'Passenger (VIP/Corporate)'
+    
+    -- Rule 2: Dedicated Freighters (Second Priority)
     WHEN (
-      -- Explicit freighter terms
-      UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
+      -- Production Freighters (F as standalone suffix)
+      UPPER(a.aircraft_details) LIKE '%F' 
+      OR UPPER(a.aircraft_details) LIKE '%-F'
+      
+      -- Converted Freighters (Specific suffixes)
+      OR UPPER(a.aircraft_details) LIKE '%(BCF)'    -- Boeing Converted Freighter
+      OR UPPER(a.aircraft_details) LIKE '%(BDSF)'   -- Bedek Special Freighter
+      OR UPPER(a.aircraft_details) LIKE '%(SF)'     -- Special Freighter
+      OR UPPER(a.aircraft_details) LIKE '%(PCF)'    -- Precision Conversions Freighter
+      OR UPPER(a.aircraft_details) LIKE '%(P2F)'    -- Passenger-to-Freighter
+      OR UPPER(a.aircraft_details) LIKE '%PF'       -- Package Freighter
+      
+      -- Explicit Terms
+      OR UPPER(a.aircraft_details) LIKE '%FREIGHTER%'
       OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-      OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
-      OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
-      OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
-      OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
-      OR UPPER(a.aircraft_details) LIKE '%F%'        -- Broad F pattern
     )
-    -- Exclude military and passenger patterns
-    AND NOT (
-      UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants
-      OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
-      OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
-      OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
-      OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
-    )
+    AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+    AND NOT UPPER(a.aircraft_details) LIKE '%FK%'     -- Military variants
+    AND NOT UPPER(a.aircraft_details) LIKE '%TANKER%' -- Military tanker
+    AND NOT UPPER(a.aircraft_details) LIKE '%VIP%'    -- VIP configuration
+    AND NOT UPPER(a.aircraft_details) LIKE '%FIRST%'  -- First class
     THEN 'Freighter'
+    
+    -- Rule 3: Multi-Role (Third Priority)
+    WHEN (
+      UPPER(a.aircraft_details) LIKE '%(FC)'        -- Freighter Convertible
+      OR UPPER(a.aircraft_details) LIKE '%(CF)'     -- Convertible Freighter
+      OR UPPER(a.aircraft_details) LIKE '%(C)'      -- Convertible
+      OR UPPER(a.aircraft_details) LIKE '%(M)'      -- Multi-role
+    )
+    AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+    AND NOT (
+      UPPER(a.aircraft_details) LIKE '%(BCF)'
+      OR UPPER(a.aircraft_details) LIKE '%(BDSF)'
+      OR UPPER(a.aircraft_details) LIKE '%(SF)'
+      OR UPPER(a.aircraft_details) LIKE '%(PCF)'
+      OR UPPER(a.aircraft_details) LIKE '%(P2F)'
+    )
+    THEN 'Multi-Role (Passenger/Cargo)'
+    
+    -- Rule 4: Default Passenger
     ELSE 'Passenger'
   END as aircraft_category
   ```
 - ❌ **NEVER** use simplified freighter detection that misses aircraft types
+- ⚠️ **CRITICAL:** Multi-letter F patterns (FH, FN, FB, FE, FZ, F2) are often Boeing customer codes, not freighter indicators
 
 ### **Rule 4: Time Range Integrity**
 - ✅ **ALWAYS** respect user-specified time ranges exactly
