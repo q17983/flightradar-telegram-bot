@@ -86,6 +86,11 @@ FUNCTION_MAP = {
         "url": f"{SUPABASE_URL}/functions/v1/aircraft-to-destination-search",
         "params": ["mode", "aircraft_types", "destinations", "start_time", "end_time"],
         "description": "Function 12: Find operators with specific aircraft types to destinations"
+    },
+    "extract-f-aircraft-types": {
+        "url": f"{SUPABASE_URL}/functions/v1/extract-f-aircraft-types",
+        "params": [],
+        "description": "Extract all aircraft types containing 'F' for classification review"
     }
 }
 
@@ -1188,6 +1193,45 @@ async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 • Response time: <3 seconds
 """
     await update.message.reply_text(functions_text, parse_mode='Markdown')
+
+async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Extract all aircraft types containing 'F' for freighter classification review."""
+    try:
+        await update.message.reply_text("🔍 Extracting all aircraft types containing 'F'...")
+        
+        # Call the extraction function
+        result = await call_supabase_function("extract-f-aircraft-types", {})
+        
+        if "error" in result:
+            await update.message.reply_text(f"❌ Error: {result['error']}")
+            return
+        
+        # Format the results
+        message = f"✅ **{result['message']}**\n\n"
+        message += f"📊 **Summary:**\n"
+        message += f"• Total types/details: {result['summary']['total_types']}\n"
+        message += f"• Currently Freighter: {result['summary']['currently_classified_as_freighter']}\n"
+        message += f"• Currently Passenger: {result['summary']['currently_classified_as_passenger']}\n\n"
+        
+        message += f"🚛 **CURRENTLY CLASSIFIED AS FREIGHTER ({len(result['freighter_classified'])}):**\n"
+        for item in result['freighter_classified'][:20]:  # Show first 20
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:30]:30}` | Count: {item['aircraft_count']}\n"
+        
+        if len(result['freighter_classified']) > 20:
+            message += f"... and {len(result['freighter_classified']) - 20} more\n"
+        
+        message += f"\n✈️ **CURRENTLY CLASSIFIED AS PASSENGER ({len(result['passenger_classified'])}):**\n"
+        for item in result['passenger_classified'][:20]:  # Show first 20
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:30]:30}` | Count: {item['aircraft_count']}\n"
+        
+        if len(result['passenger_classified']) > 20:
+            message += f"... and {len(result['passenger_classified']) - 20} more\n"
+        
+        await send_large_message(update, message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in extract_f_aircraft_command: {e}")
+        await update.message.reply_text(f"❌ Error extracting aircraft types: {str(e)}")
 
 async def timeframe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show time frame selection menu."""
@@ -3207,6 +3251,7 @@ def main() -> None:
     application.add_handler(CommandHandler("functions", functions_command))
     application.add_handler(CommandHandler("selectfunction", selectfunction_command))
     application.add_handler(CommandHandler("timeframe", timeframe_command))
+    application.add_handler(CommandHandler("extract_f_aircraft", extract_f_aircraft_command))
     application.add_handler(CallbackQueryHandler(handle_callback_query))  # Handle button clicks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
