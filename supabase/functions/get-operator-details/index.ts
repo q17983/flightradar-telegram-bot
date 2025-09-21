@@ -236,8 +236,8 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
             OR UPPER(a.aircraft_details) LIKE '%FT'
             OR UPPER(a.aircraft_details) LIKE '%FZ'
             OR UPPER(a.aircraft_details) LIKE '%FN'
-            OR UPPER(a.aircraft_details) LIKE '%FH'
             OR UPPER(a.aircraft_details) LIKE '%FE'
+            -- Note: Excluded %FH as it's often customer code (e.g., 737-8FH is passenger)
             
             -- Converted Freighters
             OR UPPER(a.aircraft_details) LIKE '%(BCF)'

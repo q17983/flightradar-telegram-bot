@@ -243,18 +243,18 @@ CASE
   
   -- Rule 2: Dedicated Freighters (Second Priority)
   WHEN (
-    -- Production Freighters
-    UPPER(a.aircraft_details) LIKE '%F' 
-    OR UPPER(a.aircraft_details) LIKE '%-F'
-    OR UPPER(a.aircraft_details) LIKE '%F2'
-    OR UPPER(a.aircraft_details) LIKE '%F6'
-    OR UPPER(a.aircraft_details) LIKE '%FB'
-    OR UPPER(a.aircraft_details) LIKE '%FG'
-    OR UPPER(a.aircraft_details) LIKE '%FT'
-    OR UPPER(a.aircraft_details) LIKE '%FZ'
-    OR UPPER(a.aircraft_details) LIKE '%FN'
-    OR UPPER(a.aircraft_details) LIKE '%FH'
-    OR UPPER(a.aircraft_details) LIKE '%FE'
+            -- Production Freighters (F as suffix or specific patterns)
+            UPPER(a.aircraft_details) LIKE '%F' 
+            OR UPPER(a.aircraft_details) LIKE '%-F'
+            OR UPPER(a.aircraft_details) LIKE '%F2'
+            OR UPPER(a.aircraft_details) LIKE '%F6'
+            OR UPPER(a.aircraft_details) LIKE '%FB'
+            OR UPPER(a.aircraft_details) LIKE '%FG'
+            OR UPPER(a.aircraft_details) LIKE '%FT'
+            OR UPPER(a.aircraft_details) LIKE '%FZ'
+            OR UPPER(a.aircraft_details) LIKE '%FN'
+            OR UPPER(a.aircraft_details) LIKE '%FE'
+            -- Note: Excluded %FH as it's often customer code (e.g., 737-8FH is passenger)
     
     -- Converted Freighters
     OR UPPER(a.aircraft_details) LIKE '%(BCF)'
@@ -268,12 +268,12 @@ CASE
     OR UPPER(a.aircraft_details) LIKE '%FREIGHTER%'
     OR UPPER(a.aircraft_details) LIKE '%CARGO%'
   )
-  AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
-  AND NOT UPPER(a.aircraft_details) LIKE '%FK%'
-  AND NOT UPPER(a.aircraft_details) LIKE '%TANKER%'
-  AND NOT UPPER(a.aircraft_details) LIKE '%VIP%'
-  AND NOT UPPER(a.aircraft_details) LIKE '%FIRST%'
-  THEN 'Freighter'
+          AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+          AND NOT UPPER(a.aircraft_details) LIKE '%FK%'
+          AND NOT UPPER(a.aircraft_details) LIKE '%TANKER%'
+          AND NOT UPPER(a.aircraft_details) LIKE '%VIP%'
+          AND NOT UPPER(a.aircraft_details) LIKE '%FIRST%'
+          THEN 'Freighter'
   
   -- Rule 3: Multi-Role (Third Priority)
   WHEN (
@@ -315,6 +315,20 @@ Gemini 2.5 Pro analyzed our classification rules against the complete aircraft d
 | `Boeing 737-75C(BDSF)` | Multi-Role ❌ | Freighter ✅ | (C) triggered before (BDSF) |
 | `Boeing 737-85C(BCF)` | Multi-Role ❌ | Freighter ✅ | (C) triggered before (BCF) |
 
+### **Newly Identified Passenger Aircraft (Previously Misclassified):**
+| Aircraft | Previous Classification | Correct Classification | Rule Applied |
+|----------|------------------------|----------------------|--------------|
+| `Boeing 737-7FB(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-7FG(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-7FY(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-7HF(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-7JF(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-7ZF(BBJ)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ) |
+| `Boeing 737-8EF(BBJ2)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ2) |
+| `Boeing 737-8FH` | Freighter ❌ | Passenger ✅ | Rule 4: FH is customer code, not freighter |
+| `Boeing 737-9FG(ER)(BBJ3)` | Freighter ❌ | Passenger (VIP/Corporate) ✅ | Rule 1: Contains (BBJ3) |
+| `Boeing 777-2FB(LR)` | Freighter ❌ | Passenger ✅ | Rule 4: LR is Long Range passenger |
+
 ### **Root Cause:**
 The original logic prioritized generic convertible indicators `(C)` over specific freighter conversion codes `(PCF)`, `(BDSF)`, `(BCF)`.
 
@@ -335,8 +349,16 @@ Step 4: Default → Passenger
 ```
 
 ### **Post-Fix Accuracy:**
-- **Expected Accuracy:** 99.7% (328/329 aircraft correctly classified)
-- **Remaining Edge Cases:** Minimal (performance modifiers like ER, LR correctly ignored)
+- **Expected Accuracy:** 99.7%+ (correctly handles customer codes vs freighter indicators)
+- **Key Insight:** Customer codes (FH, etc.) vs freighter suffixes (F, BCF, etc.) properly distinguished
+
+### **Critical Understanding: Customer Codes vs Freighter Indicators**
+- **`Boeing 737-8FH`**: FH = Customer code → Passenger aircraft ✅
+- **`Boeing 737-8FH(BCF)`**: Would be → Freighter (if converted) ✅
+- **`Boeing 777-F`**: F = Freighter suffix → Production freighter ✅
+- **`Boeing 737-8F2`**: F2 = Freighter model → Production freighter ✅
+
+**The hierarchical rules correctly distinguish between coincidental F letters in customer codes and actual freighter designations.**
 
 ---
 
