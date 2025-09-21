@@ -1,7 +1,7 @@
 # 🎯 FlightRadar Scraper - Complete Project Development Rules & Reference
 
 **Last Updated:** September 20, 2025  
-**Status:** Comprehensive Development Guide  
+**Status:** Comprehensive Development Guide + Flexible Timeframe System  
 **Purpose:** Ensure smooth, stable, and effective future development
 
 ---
@@ -19,9 +19,55 @@
 - **Frontend:** Telegram Bot API (Python)
 - **Backend:** Supabase Edge Functions (TypeScript/Deno)
 - **Database:** PostgreSQL with connection pooling
-- **AI:** OpenAI GPT-4 for query analysis
+- **AI:** OpenAI GPT-4 for query analysis + date parsing
 - **Deployment:** Railway (bot) + Supabase (functions)
 - **Version Control:** GitHub with automated Railway deployment
+- **Time Filtering:** Dynamic timeframes with `actual_arrival` data
+
+---
+
+## ⏰ **FLEXIBLE TIMEFRAME SYSTEM RULES**
+
+### **Core Principles:**
+1. **User Control First** - Users must have full control over time periods
+2. **Accuracy Over Speed** - Use `actual_arrival` for completed flights only
+3. **Dynamic Calculation** - "Past X Days" calculated from today, not database dates
+4. **Persistent Context** - Selected timeframe applies to all subsequent queries
+5. **Clean Integration** - Time parameters handled separately from function logic
+
+### **Database Filtering Standards:**
+```sql
+-- ALWAYS use actual_arrival for time filtering
+WHERE m.actual_arrival >= $start_time 
+  AND m.actual_arrival <= $end_time 
+  AND m.actual_arrival IS NOT NULL
+```
+
+### **OpenAI Prompt Rules:**
+- **NEVER** include hardcoded time parameters in prompts
+- **ALWAYS** use clean function maps without time fields
+- **ALWAYS** add "DO NOT include start_time or end_time in response"
+- Time filtering is handled by bot logic, not AI responses
+
+### **Bot Implementation Standards:**
+- **ALWAYS** pass `selected_timeframe` from `context.user_data`
+- **ALWAYS** override any time parameters from OpenAI responses
+- **ALWAYS** preserve time context in callback functions
+- **ALWAYS** provide fallback default timeframes
+
+### **Function Update Checklist:**
+When adding time filtering to new functions:
+- [ ] Add `start_time` and `end_time` parameters
+- [ ] Use `actual_arrival` with `IS NOT NULL` check
+- [ ] Update function map with time parameters
+- [ ] Test with different timeframe selections
+- [ ] Verify callback functions maintain context
+
+### **Deployment Safety:**
+- **ALWAYS** test timeframe functionality locally first
+- **ALWAYS** deploy Supabase functions before bot updates
+- **ALWAYS** verify time filtering works in production
+- **NEVER** deploy without testing `/timeframe` command
 
 ---
 

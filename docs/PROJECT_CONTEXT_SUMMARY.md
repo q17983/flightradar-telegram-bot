@@ -2,7 +2,7 @@
 
 **Last Updated:** September 20, 2025  
 **Purpose:** Provide complete project understanding for new conversations  
-**Status:** ✅ FULLY OPERATIONAL - All core functions working  
+**Status:** ✅ FULLY OPERATIONAL - All core functions working + Flexible Timeframe System  
 
 ---
 
@@ -14,9 +14,34 @@ A **Telegram bot** that provides **cargo charter flight data analysis** through 
 ### **Core Technology Stack:**
 - **Frontend:** Telegram Bot (Python) deployed on Railway
 - **Backend:** Supabase Edge Functions (TypeScript/Deno)  
-- **Database:** PostgreSQL with 1.28M flight records (Apr 2024 - May 2025)
-- **AI:** OpenAI GPT-4 for query analysis
+- **Database:** PostgreSQL with 1.28M flight records (flexible timeframe filtering)
+- **AI:** OpenAI GPT-4 for query analysis + natural language date parsing
 - **Data Source:** FlightRadar24 scraping (12,742 aircraft tracked)
+- **Time Filtering:** Dynamic timeframes based on `actual_arrival` data
+
+---
+
+## ⏰ **FLEXIBLE TIMEFRAME SYSTEM (NEW)**
+
+### **Dynamic Time Periods:**
+- **Past 7 Days** - Last week from today
+- **Past 30 Days** - Last month from today  
+- **Past 6 Months** - Last 180 days from today
+- **Past 12 Months** - Full year from today
+- **Custom Range** - User-defined dates with AI parsing
+
+### **Key Features:**
+- **`/timeframe` Command:** Set persistent time period for all queries
+- **AI Date Parsing:** Natural language input like "12JUN to 30SEP"
+- **Accurate Data:** Uses `actual_arrival` (only completed flights)
+- **Context Preservation:** Selected timeframe applies to all subsequent queries
+- **No Date Limitations:** Users can query any historical period
+
+### **Technical Implementation:**
+- **Database Filtering:** All functions use `actual_arrival IS NOT NULL`
+- **Dynamic Calculation:** "Past X Days" calculated from today's date
+- **Callback Context:** Operator details maintain same timeframe as original search
+- **Clean OpenAI Prompts:** No hardcoded time parameters
 
 ---
 
