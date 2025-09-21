@@ -238,10 +238,14 @@ async function getOperatorDetails(connection: any, operatorSelection: string, st
             -- Boeing 777-F variants (777-F + customer code)
             OR UPPER(a.aircraft_details) LIKE '%777-F%'  -- Covers 777-FS2, 777-FHT, 777-FFX, 777-F28, etc.
             
-            -- Boeing 747-F variants  
-            OR UPPER(a.aircraft_details) LIKE '%747-%F'  -- Standard 747-8F pattern
-            OR UPPER(a.aircraft_details) LIKE '%747-4%F' -- 747-400F variants
-            OR UPPER(a.aircraft_details) LIKE '%747-2%F' -- 747-200F variants
+            -- Boeing 747-F variants (Enhanced for all patterns)
+            OR UPPER(a.aircraft_details) LIKE '%747-%F'     -- Standard 747-8F pattern
+            OR UPPER(a.aircraft_details) LIKE '%747-4%F'    -- 747-400F variants (direct F)
+            OR UPPER(a.aircraft_details) LIKE '%747-2%F'    -- 747-200F variants (direct F)
+            OR UPPER(a.aircraft_details) LIKE '%747-4%F(%'  -- 747-4xxF(ER) patterns (F followed by parentheses)
+            OR UPPER(a.aircraft_details) LIKE '%747-2%F(%'  -- 747-2xxF(ER) patterns (F followed by parentheses)
+            OR UPPER(a.aircraft_details) LIKE '%747-4%(F)'  -- 747-4xx(F) patterns (F in parentheses)
+            OR UPPER(a.aircraft_details) LIKE '%747-2%(F)'  -- 747-2xx(F) patterns (F in parentheses)
             
             -- Boeing 767-F variants
             OR UPPER(a.aircraft_details) LIKE '%767-%F'  -- 767-300F pattern

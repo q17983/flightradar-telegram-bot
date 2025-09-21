@@ -46,8 +46,10 @@ Boeing 777-F + 28 = Boeing 777-F28 ✅ FREIGHTER (Air France)
 #### **B) Production Freighter Models with Customer Codes:**
 - **Boeing 777-F variants:** `%777-F%` pattern
   - ✅ Boeing 777-FS2, 777-FHT, 777-FFX, 777-F28, 777-F, etc.
-- **Boeing 747-F variants:** `%747-%F`, `%747-4%F`, `%747-2%F` patterns  
-  - ✅ Boeing 747-8F, 747-400F, 747-200F, etc.
+- **Boeing 747-F variants:** Enhanced patterns for all freighter formats
+  - ✅ Boeing 747-8F, 747-400F, 747-200F (direct F suffix)
+  - ✅ Boeing 747-4B5F(ER), 747-4HQF(ER) (F followed by parentheses)  
+  - ✅ Boeing 747-4H6(F) (F in parentheses)
 - **Boeing 767-F variants:** `%767-%F` pattern
   - ✅ Boeing 767-300F, 767-200F, etc.
 - **Airbus A330-F variants:** `%A330-%F` pattern
@@ -95,10 +97,14 @@ CASE
     -- Boeing 777-F variants (777-F + customer code)
     OR UPPER(a.aircraft_details) LIKE '%777-F%'  -- Covers 777-FS2, 777-FHT, 777-FFX, 777-F28, etc.
     
-    -- Boeing 747-F variants  
-    OR UPPER(a.aircraft_details) LIKE '%747-%F'  -- Standard 747-8F pattern
-    OR UPPER(a.aircraft_details) LIKE '%747-4%F' -- 747-400F variants
-    OR UPPER(a.aircraft_details) LIKE '%747-2%F' -- 747-200F variants
+    -- Boeing 747-F variants (Enhanced for all patterns)
+    OR UPPER(a.aircraft_details) LIKE '%747-%F'     -- Standard 747-8F pattern
+    OR UPPER(a.aircraft_details) LIKE '%747-4%F'    -- 747-400F variants (direct F)
+    OR UPPER(a.aircraft_details) LIKE '%747-2%F'    -- 747-200F variants (direct F)
+    OR UPPER(a.aircraft_details) LIKE '%747-4%F(%'  -- 747-4xxF(ER) patterns (F followed by parentheses)
+    OR UPPER(a.aircraft_details) LIKE '%747-2%F(%'  -- 747-2xxF(ER) patterns (F followed by parentheses)
+    OR UPPER(a.aircraft_details) LIKE '%747-4%(F)'  -- 747-4xx(F) patterns (F in parentheses)
+    OR UPPER(a.aircraft_details) LIKE '%747-2%(F)'  -- 747-2xx(F) patterns (F in parentheses)
     
     -- Boeing 767-F variants
     OR UPPER(a.aircraft_details) LIKE '%767-%F'  -- 767-300F pattern
@@ -152,6 +158,11 @@ END as aircraft_category
 - **Boeing 777-FHT** → **Freighter** ✅ (Was: Passenger ❌)  
 - **Boeing 777-FFX** → **Freighter** ✅ (Was: Passenger ❌)
 - **Boeing 777-F28** → **Freighter** ✅ (Was: Passenger ❌)
+
+### **Boeing 747-F Variants (Enhanced Pattern Matching):**
+- **Boeing 747-4B5F(ER)** → **Freighter** ✅ (Was: Passenger ❌)
+- **Boeing 747-4H6(F)** → **Freighter** ✅ (Was: Passenger ❌)
+- **Boeing 747-4HQF(ER)** → **Freighter** ✅ (Was: Passenger ❌)
 
 ### **Other Production Freighters (Correctly Classified):**
 - **Boeing 777-F** → **Freighter** ✅
