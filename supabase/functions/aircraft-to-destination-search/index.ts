@@ -38,8 +38,8 @@ serve(async (req: Request) => {
       mode = "search", // "get_aircraft_types" or "search"
       aircraft_types = [], 
       destinations = [],
-      start_time = "2024-04-01", 
-      end_time = "2025-05-31" 
+      start_time, 
+      end_time 
     } = requestBody
 
     // 3. Retrieve Database connection string

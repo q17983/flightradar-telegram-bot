@@ -34,8 +34,8 @@ serve(async (req: Request) => {
     const { 
       search_query, 
       operator_selection, 
-      start_time = "2024-01-01", 
-      end_time = "2024-12-31",
+      start_time, 
+      end_time,
       geographic_filter,  // ENHANCED: Geographic filtering
       filter_type         // ENHANCED: "country" or "continent"
     } = await req.json()

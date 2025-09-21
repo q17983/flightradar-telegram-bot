@@ -406,9 +406,11 @@ def check_function_compatibility(selected_function: str, natural_function: str, 
 async def analyze_geographic_query_with_openai(query: str, time_frame: dict = None) -> dict:
     """Analyze user query as geographic query (Function 10) using OpenAI with universal location intelligence."""
     
-    # Set default time frame if not provided
+    # Set default time frame if not provided - use past 12 months
     if not time_frame:
-        time_frame = {"start_time": "2024-04-01", "end_time": "2025-05-31"}
+        today = datetime.now()
+        twelve_months_ago = today - timedelta(days=365)
+        time_frame = {"start_time": twelve_months_ago.strftime("%Y-%m-%d"), "end_time": today.strftime("%Y-%m-%d")}
     
     try:
         response = openai_client.chat.completions.create(
@@ -573,10 +575,12 @@ async def call_supabase_function(function_name: str, parameters: dict, time_fram
             parameters["end_time"] = time_frame["end_time"]
             logger.info(f"🕒 Using time frame: {time_frame['start_time']} to {time_frame['end_time']}")
         elif "start_time" not in parameters or "end_time" not in parameters:
-            # Only set defaults if not already in parameters
-            parameters["start_time"] = "2024-04-01"
-            parameters["end_time"] = "2025-12-31"
-            logger.info("🕒 Using default time frame: 2024-04-01 to 2025-12-31")
+            # Only set defaults if not already in parameters - use past 12 months
+            today = datetime.now()
+            twelve_months_ago = today - timedelta(days=365)
+            parameters["start_time"] = twelve_months_ago.strftime("%Y-%m-%d")
+            parameters["end_time"] = today.strftime("%Y-%m-%d")
+            logger.info(f"🕒 Using default time frame (past 12 months): {parameters['start_time']} to {parameters['end_time']}")
     else:
         # Remove the no_time_filter flag before sending to function
         parameters.pop("no_time_filter", None)
