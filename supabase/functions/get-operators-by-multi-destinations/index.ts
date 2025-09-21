@@ -90,18 +90,32 @@ serve(async (req: Request) => {
               
               -- Rule 2: Dedicated Freighters (Second Priority)
               WHEN (
-                -- Production Freighters (F as standalone suffix)
-                UPPER(a.aircraft_details) LIKE '%F' 
-                OR UPPER(a.aircraft_details) LIKE '%-F'
-                -- Note: Multi-letter F patterns (FH, FN, FB, FE, FZ, F2) may be customer codes
+                -- A) Explicit Conversion Codes
+                UPPER(a.aircraft_details) LIKE '%(BCF)'     -- Boeing Converted Freighter
+                OR UPPER(a.aircraft_details) LIKE '%(BDSF)' -- Boeing Dedicated Special Freighter
+                OR UPPER(a.aircraft_details) LIKE '%(SF)'   -- Special Freighter
+                OR UPPER(a.aircraft_details) LIKE '%(PCF)'  -- Passenger to Cargo Freighter
+                OR UPPER(a.aircraft_details) LIKE '%(P2F)'  -- Passenger to Freighter
+                OR UPPER(a.aircraft_details) LIKE '%PF'     -- Package Freighter
                 
-                -- Converted Freighters
-                OR UPPER(a.aircraft_details) LIKE '%(BCF)'
-                OR UPPER(a.aircraft_details) LIKE '%(BDSF)'
-                OR UPPER(a.aircraft_details) LIKE '%(SF)'
-                OR UPPER(a.aircraft_details) LIKE '%(PCF)'
-                OR UPPER(a.aircraft_details) LIKE '%(P2F)'
-                OR UPPER(a.aircraft_details) LIKE '%PF'
+                -- B) Production Freighter Models with Customer Codes
+                -- Boeing 777-F variants (777-F + customer code)
+                OR UPPER(a.aircraft_details) LIKE '%777-F%'  -- Covers 777-FS2, 777-FHT, 777-FFX, 777-F28, etc.
+                
+                -- Boeing 747-F variants  
+                OR UPPER(a.aircraft_details) LIKE '%747-%F'  -- Standard 747-8F pattern
+                OR UPPER(a.aircraft_details) LIKE '%747-4%F' -- 747-400F variants
+                OR UPPER(a.aircraft_details) LIKE '%747-2%F' -- 747-200F variants
+                
+                -- Boeing 767-F variants
+                OR UPPER(a.aircraft_details) LIKE '%767-%F'  -- 767-300F pattern
+                
+                -- Airbus A330-F variants
+                OR UPPER(a.aircraft_details) LIKE '%A330-%F' -- A330-200F, A330-300F patterns
+                
+                -- Generic F suffix for other models
+                OR UPPER(a.aircraft_details) LIKE '%-F'      -- Dash-F pattern (e.g., ATR-72F)
+                OR (UPPER(a.aircraft_details) LIKE '%F' AND NOT UPPER(a.aircraft_details) LIKE '%F%F%') -- Single F suffix
                 
                 -- Explicit Terms
                 OR UPPER(a.aircraft_details) LIKE '%FREIGHTER%'
