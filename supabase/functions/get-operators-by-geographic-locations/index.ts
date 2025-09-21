@@ -161,27 +161,62 @@ serve(async (req: Request) => {
           fm.dest_continent,
           COUNT(*) as frequency,
           CASE 
+            -- Rule 1: VIP/Corporate (Highest Priority)
+            WHEN UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+            THEN 'Passenger (VIP/Corporate)'
+            
+            -- Rule 2: Dedicated Freighters (Second Priority)
             WHEN (
-              -- Explicit freighter terms
-              UPPER(a.aircraft_details) LIKE '%FREIGHTER%' 
-              OR UPPER(a.aircraft_details) LIKE '%CARGO%'
-              OR UPPER(a.aircraft_details) LIKE '%BCF%'      -- Boeing Converted Freighter
-              OR UPPER(a.aircraft_details) LIKE '%BDSF%'     -- Boeing Dedicated Special Freighter
-              OR UPPER(a.aircraft_details) LIKE '%SF%'       -- Special Freighter
-              OR UPPER(a.aircraft_details) LIKE '%-F%'       -- Dash-F patterns
+              -- Production Freighters
+              UPPER(a.aircraft_details) LIKE '%F' 
+              OR UPPER(a.aircraft_details) LIKE '%-F'
+              OR UPPER(a.aircraft_details) LIKE '%F2'
+              OR UPPER(a.aircraft_details) LIKE '%F6'
+              OR UPPER(a.aircraft_details) LIKE '%FB'
+              OR UPPER(a.aircraft_details) LIKE '%FG'
+              OR UPPER(a.aircraft_details) LIKE '%FT'
+              OR UPPER(a.aircraft_details) LIKE '%FZ'
+              OR UPPER(a.aircraft_details) LIKE '%FN'
+              OR UPPER(a.aircraft_details) LIKE '%FH'
+              OR UPPER(a.aircraft_details) LIKE '%FE'
               
-              -- Broad F pattern for comprehensive coverage
-              OR UPPER(a.aircraft_details) LIKE '%F%'
+              -- Converted Freighters
+              OR UPPER(a.aircraft_details) LIKE '%(BCF)'
+              OR UPPER(a.aircraft_details) LIKE '%(BDSF)'
+              OR UPPER(a.aircraft_details) LIKE '%(SF)'
+              OR UPPER(a.aircraft_details) LIKE '%(PCF)'
+              OR UPPER(a.aircraft_details) LIKE '%(P2F)'
+              OR UPPER(a.aircraft_details) LIKE '%PF'
+              
+              -- Explicit Terms
+              OR UPPER(a.aircraft_details) LIKE '%FREIGHTER%'
+              OR UPPER(a.aircraft_details) LIKE '%CARGO%'
             )
-            -- Exclude military and passenger patterns
-            AND NOT (
-              UPPER(a.aircraft_details) LIKE '%FK%'          -- Military variants (e.g., 767-2FK)
-              OR UPPER(a.aircraft_details) LIKE '%TANKER%'   -- Military tanker
-              OR UPPER(a.aircraft_details) LIKE '%VIP%'      -- VIP configuration
-              OR UPPER(a.aircraft_details) LIKE '%FIRST%'    -- First class
-              OR UPPER(a.aircraft_details) LIKE '%FLEX%'     -- Flexible config
-            )
+            AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+            AND NOT UPPER(a.aircraft_details) LIKE '%FK%'
+            AND NOT UPPER(a.aircraft_details) LIKE '%TANKER%'
+            AND NOT UPPER(a.aircraft_details) LIKE '%VIP%'
+            AND NOT UPPER(a.aircraft_details) LIKE '%FIRST%'
             THEN 'Freighter'
+            
+            -- Rule 3: Multi-Role (Third Priority)
+            WHEN (
+              UPPER(a.aircraft_details) LIKE '%(FC)'
+              OR UPPER(a.aircraft_details) LIKE '%(CF)'
+              OR UPPER(a.aircraft_details) LIKE '%(C)'
+              OR UPPER(a.aircraft_details) LIKE '%(M)'
+            )
+            AND NOT UPPER(a.aircraft_details) LIKE '%(BBJ%)'
+            AND NOT (
+              UPPER(a.aircraft_details) LIKE '%(BCF)'
+              OR UPPER(a.aircraft_details) LIKE '%(BDSF)'
+              OR UPPER(a.aircraft_details) LIKE '%(SF)'
+              OR UPPER(a.aircraft_details) LIKE '%(PCF)'
+              OR UPPER(a.aircraft_details) LIKE '%(P2F)'
+            )
+            THEN 'Multi-Role (Passenger/Cargo)'
+            
+            -- Rule 4: Default Passenger
             ELSE 'Passenger'
           END as aircraft_category,
           fm.location_match

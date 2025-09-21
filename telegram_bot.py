@@ -1213,17 +1213,27 @@ async def extract_f_aircraft_command(update: Update, context: ContextTypes.DEFAU
         
         # Format the results
         message = f"✅ **{result['message']}**\n\n"
-        message += f"📊 **Summary:**\n"
+        message += f"📊 **Summary (Gemini 2.5 Pro Validated):**\n"
         message += f"• Total types/details: {result['summary']['total_types']}\n"
-        message += f"• Currently Freighter: {result['summary']['currently_classified_as_freighter']}\n"
-        message += f"• Currently Passenger: {result['summary']['currently_classified_as_passenger']}\n\n"
+        message += f"• Freighter: {result['summary']['currently_classified_as_freighter']}\n"
+        message += f"• Passenger: {result['summary']['currently_classified_as_passenger']}\n"
+        message += f"• VIP/Corporate: {result['summary']['currently_classified_as_vip_corporate']}\n"
+        message += f"• Multi-Role: {result['summary']['currently_classified_as_multi_role']}\n\n"
         
-        message += f"🚛 **CURRENTLY CLASSIFIED AS FREIGHTER ({len(result['freighter_classified'])}):**\n"
+        message += f"🚛 **FREIGHTER ({len(result['freighter_classified'])}):**\n"
         for item in result['freighter_classified']:  # Show ALL freighters
             message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
         
-        message += f"\n✈️ **CURRENTLY CLASSIFIED AS PASSENGER ({len(result['passenger_classified'])}):**\n"
+        message += f"\n✈️ **PASSENGER ({len(result['passenger_classified'])}):**\n"
         for item in result['passenger_classified']:  # Show ALL passengers
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
+        
+        message += f"\n🏢 **VIP/CORPORATE ({len(result['vip_corporate_classified'])}):**\n"
+        for item in result['vip_corporate_classified']:  # Show ALL VIP
+            message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
+        
+        message += f"\n🔄 **MULTI-ROLE ({len(result['multi_role_classified'])}):**\n"
+        for item in result['multi_role_classified']:  # Show ALL multi-role
             message += f"`{item['aircraft_type']:8}` | `{item['aircraft_details'][:35]:35}` | Count: {item['aircraft_count']}\n"
         
         await send_large_message(update.message, message)
